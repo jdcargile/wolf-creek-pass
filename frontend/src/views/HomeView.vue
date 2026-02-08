@@ -35,11 +35,58 @@ onMounted(async () => {
 
     <!-- Dashboard content -->
     <template v-else-if="store.hasData">
+      <!-- Wolf Creek closure banner -->
+      <div v-if="store.wolfCreekClosed" class="closure-banner">
+        Wolf Creek Pass (SR-35) is <strong>CLOSED</strong>.
+        Showing US-40/Tabiona bypass route.
+      </div>
+
       <!-- Route summary bar -->
       <RouteSummary />
 
       <!-- Interactive map -->
       <RouteMap />
+
+      <!-- Mountain pass conditions -->
+      <section v-if="store.passes.length" class="passes-section">
+        <h2>Mountain Passes</h2>
+        <div class="passes-grid">
+          <div
+            v-for="p in store.passes"
+            :key="p.id"
+            class="pass-card"
+            :class="{
+              'pass-card--closed': p.closure_status === 'CLOSED',
+              'pass-card--cold': p.air_temperature && parseInt(p.air_temperature) <= 32,
+            }"
+          >
+            <div class="pass-header">
+              <div class="pass-name">{{ p.name }}</div>
+              <span
+                v-if="p.closure_status"
+                class="pass-status"
+                :class="p.closure_status === 'CLOSED' ? 'pass-status--closed' : 'pass-status--open'"
+              >
+                {{ p.closure_status }}
+              </span>
+            </div>
+            <div class="pass-elev">{{ p.elevation_ft }}'</div>
+            <div class="pass-temp" v-if="p.air_temperature">
+              {{ p.air_temperature }}&deg;F
+            </div>
+            <div class="pass-detail" v-if="p.surface_status">
+              Surface: {{ p.surface_status }}
+            </div>
+            <div class="pass-detail" v-if="p.wind_speed">
+              Wind: {{ p.wind_speed }} mph {{ p.wind_direction }}
+              <span v-if="p.wind_gust">(gusts {{ p.wind_gust }})</span>
+            </div>
+            <div class="pass-detail" v-if="p.visibility">
+              Visibility: {{ p.visibility }}
+            </div>
+          </div>
+        </div>
+      </section>
 
       <!-- Weather conditions -->
       <section v-if="store.currentCycle?.weather?.length" class="weather-section">
@@ -184,6 +231,88 @@ code {
   padding: 0.15rem 0.4rem;
   border-radius: 4px;
   font-size: 0.85rem;
+}
+
+/* Wolf Creek closure banner */
+.closure-banner {
+  background: #fef2f2;
+  border: 2px solid #dc2626;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  color: #dc2626;
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-align: center;
+}
+
+/* Mountain passes grid */
+.passes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
+}
+
+.pass-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+.pass-card--closed {
+  border-color: #dc2626;
+  background: #fef2f2;
+}
+
+.pass-card--cold {
+  border-color: #3b82f6;
+}
+
+.pass-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin-bottom: 0.25rem;
+}
+
+.pass-name {
+  font-weight: 600;
+  font-size: 0.85rem;
+  line-height: 1.2;
+}
+
+.pass-status {
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.pass-status--open {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.pass-status--closed {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.pass-elev {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+}
+
+.pass-temp {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.pass-detail {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
 }
 
 /* Camera grid */

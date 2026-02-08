@@ -11,7 +11,11 @@ from udot import (
     fetch_route_conditions,
     fetch_route_events,
     fetch_route_weather,
-    fetch_mountain_pass_info,
+    fetch_route_passes,
+    fetch_all_snow_plows,
+    fetch_route_plows,
+    is_wolf_creek_closed,
+    ROUTE_PASS_KEYWORDS,
     BASE_URL,
 )
 
@@ -168,28 +172,191 @@ class TestFetchRouteWeather:
         assert "Wendover I-80" not in names
 
 
-class TestFetchMountainPassInfo:
+class TestFetchRoutePasses:
     @responses.activate
-    def test_finds_wolf_creek(self):
+    def test_filters_by_keywords(self):
         responses.add(
             responses.GET,
             f"{BASE_URL}/mountainpasses",
             json=[
-                {"Name": "Parley's Summit", "AirTemp": "35"},
-                {"Name": "Wolf Creek Pass", "AirTemp": "25"},
+                {
+                    "Id": 44,
+                    "Name": "Wolf Creek Pass",
+                    "Roadway": "SR-35",
+                    "MaxElevation": "9485",
+                    "Latitude": 40.37,
+                    "Longitude": -111.12,
+                    "AirTemperature": "25",
+                    "WindSpeed": "15",
+                    "SurfaceStatus": "Snow/Ice",
+                    "SeasonalInfo": [
+                        {
+                            "SeasonalClosureStatus": "OPEN",
+                            "SeasonalClosureDescription": "",
+                        }
+                    ],
+                },
+                {
+                    "Id": 10,
+                    "Name": "Parley's Summit",
+                    "Roadway": "I-80",
+                    "AirTemperature": "32",
+                    "SeasonalInfo": [],
+                },
+                {
+                    "Id": 99,
+                    "Name": "Cedar Breaks Summit",
+                    "Roadway": "SR-14",
+                    "AirTemperature": "20",
+                },
             ],
             status=200,
         )
-        result = fetch_mountain_pass_info(FAKE_KEY)
-        assert result is not None
-        assert result["Name"] == "Wolf Creek Pass"
+        passes = fetch_route_passes(FAKE_KEY)
+        names = [p.name for p in passes]
+        assert "Wolf Creek Pass" in names
+        assert "Parley's Summit" in names
+        assert "Cedar Breaks Summit" not in names
+
+    @responses.activate
+    def test_parses_closure_status(self):
+        responses.add(
+            responses.GET,
+            f"{BASE_URL}/mountainpasses",
+            json=[
+                {
+                    "Id": 44,
+                    "Name": "Wolf Creek Pass",
+                    "SeasonalInfo": [
+                        {
+                            "SeasonalClosureStatus": "CLOSED",
+                            "SeasonalClosureDescription": "Seasonal closure",
+                        }
+                    ],
+                },
+            ],
+            status=200,
+        )
+        passes = fetch_route_passes(FAKE_KEY)
+        assert len(passes) == 1
+        assert passes[0].closure_status == "CLOSED"
+        assert passes[0].closure_description == "Seasonal closure"
+
+
+class TestIsWolfCreekClosed:
+    @responses.activate
+    def test_open(self):
+        responses.add(
+            responses.GET,
+            f"{BASE_URL}/mountainpasses",
+            json=[
+                {
+                    "Id": 44,
+                    "Name": "Wolf Creek Pass",
+                    "SeasonalInfo": [{"SeasonalClosureStatus": "OPEN"}],
+                },
+            ],
+            status=200,
+        )
+        assert is_wolf_creek_closed(FAKE_KEY) is False
+
+    @responses.activate
+    def test_closed(self):
+        responses.add(
+            responses.GET,
+            f"{BASE_URL}/mountainpasses",
+            json=[
+                {
+                    "Id": 44,
+                    "Name": "Wolf Creek Pass",
+                    "SeasonalInfo": [{"SeasonalClosureStatus": "CLOSED"}],
+                },
+            ],
+            status=200,
+        )
+        assert is_wolf_creek_closed(FAKE_KEY) is True
 
     @responses.activate
     def test_not_found(self):
         responses.add(
             responses.GET,
             f"{BASE_URL}/mountainpasses",
-            json=[{"Name": "Parley's Summit"}],
+            json=[{"Id": 10, "Name": "Parley's Summit"}],
             status=200,
         )
-        assert fetch_mountain_pass_info(FAKE_KEY) is None
+        assert is_wolf_creek_closed(FAKE_KEY) is False
+
+
+class TestFetchAllSnowPlows:
+    @responses.activate
+    def test_parses_plows(self):
+        responses.add(
+            responses.GET,
+            f"{BASE_URL}/servicevehicles",
+            json=[
+                {
+                    "Id": 501,
+                    "Name": "Plow Unit 42",
+                    "Latitude": 40.37,
+                    "Longitude": -111.12,
+                    "Heading": 180.0,
+                    "Speed": 25.0,
+                    "LastUpdated": "2026-02-07T12:30:00",
+                },
+            ],
+            status=200,
+        )
+        plows = fetch_all_snow_plows(FAKE_KEY)
+        assert len(plows) == 1
+        assert plows[0].id == 501
+        assert plows[0].name == "Plow Unit 42"
+        assert plows[0].speed == 25.0
+
+    @responses.activate
+    def test_empty_response(self):
+        responses.add(
+            responses.GET,
+            f"{BASE_URL}/servicevehicles",
+            json=[],
+            status=200,
+        )
+        assert fetch_all_snow_plows(FAKE_KEY) == []
+
+
+class TestFetchRoutePlows:
+    @responses.activate
+    def test_filters_by_proximity(self, sample_route):
+        responses.add(
+            responses.GET,
+            f"{BASE_URL}/servicevehicles",
+            json=[
+                {
+                    "Id": 501,
+                    "Name": "Near Route Plow",
+                    "Latitude": 40.37,
+                    "Longitude": -111.12,
+                    "Speed": 25.0,
+                },
+                {
+                    "Id": 502,
+                    "Name": "Far Away Plow",
+                    "Latitude": 38.0,
+                    "Longitude": -109.0,
+                    "Speed": 30.0,
+                },
+            ],
+            status=200,
+        )
+        plows = fetch_route_plows(FAKE_KEY, [sample_route], buffer_km=5.0)
+        assert len(plows) == 1
+        assert plows[0].name == "Near Route Plow"
+
+    @responses.activate
+    def test_empty_when_no_plows(self, sample_route):
+        responses.add(
+            responses.GET,
+            f"{BASE_URL}/servicevehicles",
+            json=[],
+            status=200,
+        )
+        assert fetch_route_plows(FAKE_KEY, [sample_route]) == []

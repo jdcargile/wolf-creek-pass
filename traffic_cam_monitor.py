@@ -3,12 +3,13 @@
 Wolf Creek Pass -- Route-Aware Traffic Camera Monitor
 
 Orchestrates the full capture cycle:
-1. Get routes (Google Directions API -- 3 named routes)
-2. Fetch cameras along routes (UDOT API, hardcoded by route)
-3. Download + analyze camera images (Claude Vision)
-4. Fetch road conditions, events, weather (UDOT API)
-5. Store everything (DynamoDB or SQLite)
-6. Export JSON for Vue frontend
+1. Check Wolf Creek Pass closure status (UDOT API)
+2. Get routes (Google Directions API -- 3 named routes)
+3. Fetch cameras along routes (conditional on closure status)
+4. Download + analyze camera images (Claude Vision)
+5. Fetch road conditions, events, weather, passes, plows (UDOT API)
+6. Store everything (DynamoDB or SQLite)
+7. Export JSON for Vue frontend
 """
 
 import hashlib
@@ -26,16 +27,41 @@ from analyze import analyze_image_bytes
 from export import export_cycle_index, export_cycle_to_file
 from models import CaptureRecord, CycleSummary
 from route import get_routes
-from settings import Settings, get_all_camera_ids
+from settings import ROUTES, Settings, get_all_camera_ids
 from storage import create_storage
 from udot import (
     fetch_all_cameras,
     fetch_route_conditions,
     fetch_route_events,
+    fetch_route_passes,
+    fetch_route_plows,
     fetch_route_weather,
+    is_wolf_creek_closed,
 )
 
 console = Console()
+
+
+def _build_camera_ids(wolf_creek_closed: bool) -> list[int]:
+    """Build the list of camera IDs to process.
+
+    When Wolf Creek Pass is OPEN, skip the US-40/Tabiona bypass cameras.
+    When CLOSED, include all 3 routes.
+    """
+    if wolf_creek_closed:
+        return get_all_camera_ids()
+
+    # Only routes 1 and 2 (exclude us40-tabiona)
+    seen: set[int] = set()
+    result: list[int] = []
+    for route_cfg in ROUTES:
+        if route_cfg.route_id == "us40-tabiona":
+            continue
+        for cid in route_cfg.camera_ids:
+            if cid not in seen:
+                seen.add(cid)
+                result.append(cid)
+    return result
 
 
 def run_capture_cycle(settings: Settings) -> None:
@@ -48,7 +74,23 @@ def run_capture_cycle(settings: Settings) -> None:
 
     console.rule(f"[bold blue]Capture cycle {cycle_id}[/bold blue]")
 
-    # 1. Get all 3 routes
+    # 1. Check Wolf Creek Pass closure status
+    wolf_creek_closed = False
+    try:
+        wolf_creek_closed = is_wolf_creek_closed(settings.udot_api_key)
+    except Exception as e:
+        console.print(f"[yellow]Wolf Creek status check failed:[/yellow] {e}")
+
+    if wolf_creek_closed:
+        console.print(
+            "[red bold]Wolf Creek CLOSED -- including US-40/Tabiona bypass cameras[/red bold]"
+        )
+    else:
+        console.print(
+            "[green]Wolf Creek OPEN -- skipping US-40/Tabiona bypass cameras[/green]"
+        )
+
+    # 2. Get all 3 routes
     routes = []
     if settings.google_maps_api_key:
         try:
@@ -58,24 +100,24 @@ def run_capture_cycle(settings: Settings) -> None:
             console.print(
                 f"[yellow]Route fetch failed (continuing without):[/yellow] {e}"
             )
-            routes = storage.get_routes()  # Fall back to cached routes
+            routes = storage.get_routes()
     else:
         console.print("[yellow]No Google Maps API key -- skipping routes[/yellow]")
         routes = storage.get_routes()
 
     primary_route = routes[0] if routes else None
 
-    # 2. Fetch cameras (union of all route camera IDs)
-    all_camera_ids = get_all_camera_ids()
+    # 3. Fetch cameras (conditional on Wolf Creek closure)
+    camera_ids = _build_camera_ids(wolf_creek_closed)
     all_cameras = fetch_all_cameras(settings.udot_api_key)
     camera_lookup = {c.Id: c for c in all_cameras}
-    cameras = [camera_lookup[cid] for cid in all_camera_ids if cid in camera_lookup]
+    cameras = [camera_lookup[cid] for cid in camera_ids if cid in camera_lookup]
     console.print(
-        f"Matched [bold]{len(cameras)}[/bold] of {len(all_camera_ids)} "
+        f"Matched [bold]{len(cameras)}[/bold] of {len(camera_ids)} "
         f"hardcoded route cameras"
     )
 
-    # 3. Download images + analyze with Claude Vision
+    # 4. Download images + analyze with Claude Vision
     vision_client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
     snow_count = 0
     skipped_count = 0
@@ -164,8 +206,7 @@ def run_capture_cycle(settings: Settings) -> None:
         if analysis.notes:
             console.print(f"  [dim]{analysis.notes}[/dim]")
 
-    # 4. Fetch UDOT enrichment data (non-fatal -- don't let this block export)
-    # Use the primary route for enrichment queries
+    # 5. Fetch UDOT enrichment data (non-fatal -- don't let this block export)
     conditions, events, weather = [], [], []
     if primary_route and primary_route.polyline:
         try:
@@ -189,7 +230,23 @@ def run_capture_cycle(settings: Settings) -> None:
         except Exception as e:
             console.print(f"[yellow]Weather failed (continuing):[/yellow] {e}")
 
-    # 5. Save cycle summary (use primary route for travel time/distance)
+    # 5b. Fetch mountain pass conditions
+    try:
+        passes = fetch_route_passes(settings.udot_api_key)
+        storage.save_mountain_passes(cycle_id, passes)
+        console.print(f"Saved [bold]{len(passes)}[/bold] mountain pass conditions")
+    except Exception as e:
+        console.print(f"[yellow]Mountain passes failed (continuing):[/yellow] {e}")
+
+    # 5c. Fetch snow plows near all routes
+    try:
+        plows = fetch_route_plows(settings.udot_api_key, routes)
+        storage.save_snow_plows(cycle_id, plows)
+        console.print(f"Saved [bold]{len(plows)}[/bold] snow plows")
+    except Exception as e:
+        console.print(f"[yellow]Snow plows failed (continuing):[/yellow] {e}")
+
+    # 6. Save cycle summary (use primary route for travel time/distance)
     cycle.completed_at = datetime.now().isoformat()
     cycle.cameras_processed = len(cameras)
     cycle.snow_count = snow_count
@@ -202,7 +259,7 @@ def run_capture_cycle(settings: Settings) -> None:
     cycle.distance_m = primary_route.distance_m if primary_route else None
     storage.save_cycle(cycle)
 
-    # 6. Export JSON for Vue
+    # 7. Export JSON for Vue
     export_cycle_to_file(storage, cycle, routes, settings)
     export_cycle_index(storage, settings)
 

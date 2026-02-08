@@ -25,8 +25,10 @@ from models import (
     CaptureRecord,
     CycleSummary,
     Event,
+    MountainPass,
     RoadCondition,
     Route,
+    SnowPlow,
     WeatherStation,
 )
 from settings import Settings
@@ -74,6 +76,16 @@ class Storage(Protocol):
     # Weather
     def save_weather(self, cycle_id: str, stations: list[WeatherStation]) -> None: ...
     def get_weather(self, cycle_id: str) -> list[WeatherStation]: ...
+
+    # Mountain passes
+    def save_mountain_passes(
+        self, cycle_id: str, passes: list[MountainPass]
+    ) -> None: ...
+    def get_mountain_passes(self, cycle_id: str) -> list[MountainPass]: ...
+
+    # Snow plows
+    def save_snow_plows(self, cycle_id: str, plows: list[SnowPlow]) -> None: ...
+    def get_snow_plows(self, cycle_id: str) -> list[SnowPlow]: ...
 
     # Images
     def save_image(self, key: str, data: bytes) -> str: ...
@@ -210,6 +222,43 @@ class SQLiteStorage:
                 wind_direction TEXT,
                 precipitation TEXT,
                 relative_humidity TEXT
+            )
+        """)
+
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS mountain_passes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cycle_id TEXT,
+                pass_id INTEGER,
+                name TEXT,
+                roadway TEXT,
+                elevation_ft TEXT,
+                latitude REAL,
+                longitude REAL,
+                air_temperature TEXT,
+                wind_speed TEXT,
+                wind_gust TEXT,
+                wind_direction TEXT,
+                surface_temp TEXT,
+                surface_status TEXT,
+                visibility TEXT,
+                forecasts TEXT,
+                closure_status TEXT,
+                closure_description TEXT
+            )
+        """)
+
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS snow_plows (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cycle_id TEXT,
+                plow_id INTEGER,
+                name TEXT,
+                latitude REAL,
+                longitude REAL,
+                heading REAL,
+                speed REAL,
+                last_updated TEXT
             )
         """)
 
@@ -537,6 +586,111 @@ class SQLiteStorage:
                 wind_direction=r["wind_direction"],
                 precipitation=r["precipitation"],
                 relative_humidity=r["relative_humidity"],
+            )
+            for r in rows
+        ]
+
+    # -- Mountain Passes --
+
+    def save_mountain_passes(self, cycle_id: str, passes: list[MountainPass]) -> None:
+        conn = self._conn()
+        for p in passes:
+            conn.execute(
+                """INSERT INTO mountain_passes
+                (cycle_id, pass_id, name, roadway, elevation_ft, latitude, longitude,
+                 air_temperature, wind_speed, wind_gust, wind_direction,
+                 surface_temp, surface_status, visibility, forecasts,
+                 closure_status, closure_description)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    cycle_id,
+                    p.id,
+                    p.name,
+                    p.roadway,
+                    p.elevation_ft,
+                    p.latitude,
+                    p.longitude,
+                    p.air_temperature,
+                    p.wind_speed,
+                    p.wind_gust,
+                    p.wind_direction,
+                    p.surface_temp,
+                    p.surface_status,
+                    p.visibility,
+                    p.forecasts,
+                    p.closure_status,
+                    p.closure_description,
+                ),
+            )
+        conn.commit()
+        conn.close()
+
+    def get_mountain_passes(self, cycle_id: str) -> list[MountainPass]:
+        conn = self._conn()
+        rows = conn.execute(
+            "SELECT * FROM mountain_passes WHERE cycle_id = ?", (cycle_id,)
+        ).fetchall()
+        conn.close()
+        return [
+            MountainPass(
+                id=r["pass_id"],
+                name=r["name"],
+                roadway=r["roadway"] or "",
+                elevation_ft=r["elevation_ft"] or "",
+                latitude=r["latitude"],
+                longitude=r["longitude"],
+                air_temperature=r["air_temperature"] or "",
+                wind_speed=r["wind_speed"] or "",
+                wind_gust=r["wind_gust"] or "",
+                wind_direction=r["wind_direction"] or "",
+                surface_temp=r["surface_temp"] or "",
+                surface_status=r["surface_status"] or "",
+                visibility=r["visibility"] or "",
+                forecasts=r["forecasts"] or "",
+                closure_status=r["closure_status"] or "",
+                closure_description=r["closure_description"] or "",
+            )
+            for r in rows
+        ]
+
+    # -- Snow Plows --
+
+    def save_snow_plows(self, cycle_id: str, plows: list[SnowPlow]) -> None:
+        conn = self._conn()
+        for p in plows:
+            conn.execute(
+                """INSERT INTO snow_plows
+                (cycle_id, plow_id, name, latitude, longitude, heading, speed, last_updated)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    cycle_id,
+                    p.id,
+                    p.name,
+                    p.latitude,
+                    p.longitude,
+                    p.heading,
+                    p.speed,
+                    p.last_updated,
+                ),
+            )
+        conn.commit()
+        conn.close()
+
+    def get_snow_plows(self, cycle_id: str) -> list[SnowPlow]:
+        conn = self._conn()
+        rows = conn.execute(
+            "SELECT * FROM snow_plows WHERE cycle_id = ?", (cycle_id,)
+        ).fetchall()
+        conn.close()
+        return [
+            SnowPlow(
+                id=r["plow_id"],
+                name=r["name"] or "",
+                latitude=r["latitude"],
+                longitude=r["longitude"],
+                heading=r["heading"],
+                speed=r["speed"],
+                last_updated=r["last_updated"] or "",
             )
             for r in rows
         ]
@@ -981,6 +1135,112 @@ class DynamoStorage:
                 wind_direction=item.get("wind_direction", ""),
                 precipitation=item.get("precipitation", ""),
                 relative_humidity=item.get("relative_humidity", ""),
+            )
+            for item in resp.get("Items", [])
+        ]
+
+    # -- Mountain Passes --
+
+    def save_mountain_passes(self, cycle_id: str, passes: list[MountainPass]) -> None:
+        for p in passes:
+            self.table.put_item(
+                Item=_strip_none(
+                    {
+                        "PK": f"PASS#{p.name}",
+                        "SK": cycle_id,
+                        "GSI1PK": f"CYCLE#{cycle_id}",
+                        "GSI1SK": f"PASS#{p.name}",
+                        "pass_id": p.id,
+                        "name": p.name,
+                        "roadway": p.roadway,
+                        "elevation_ft": p.elevation_ft,
+                        "latitude": _decimal_safe(p.latitude),
+                        "longitude": _decimal_safe(p.longitude),
+                        "air_temperature": p.air_temperature,
+                        "wind_speed": p.wind_speed,
+                        "wind_gust": p.wind_gust,
+                        "wind_direction": p.wind_direction,
+                        "surface_temp": p.surface_temp,
+                        "surface_status": p.surface_status,
+                        "visibility": p.visibility,
+                        "forecasts": p.forecasts,
+                        "closure_status": p.closure_status,
+                        "closure_description": p.closure_description,
+                    }
+                )
+            )
+
+    def get_mountain_passes(self, cycle_id: str) -> list[MountainPass]:
+        resp = self.table.query(
+            IndexName="GSI1",
+            KeyConditionExpression="GSI1PK = :pk AND begins_with(GSI1SK, :prefix)",
+            ExpressionAttributeValues={
+                ":pk": f"CYCLE#{cycle_id}",
+                ":prefix": "PASS#",
+            },
+        )
+        return [
+            MountainPass(
+                id=int(item.get("pass_id", 0)),
+                name=item.get("name", ""),
+                roadway=item.get("roadway", ""),
+                elevation_ft=item.get("elevation_ft", ""),
+                latitude=_float_safe(item.get("latitude")),
+                longitude=_float_safe(item.get("longitude")),
+                air_temperature=item.get("air_temperature", ""),
+                wind_speed=item.get("wind_speed", ""),
+                wind_gust=item.get("wind_gust", ""),
+                wind_direction=item.get("wind_direction", ""),
+                surface_temp=item.get("surface_temp", ""),
+                surface_status=item.get("surface_status", ""),
+                visibility=item.get("visibility", ""),
+                forecasts=item.get("forecasts", ""),
+                closure_status=item.get("closure_status", ""),
+                closure_description=item.get("closure_description", ""),
+            )
+            for item in resp.get("Items", [])
+        ]
+
+    # -- Snow Plows --
+
+    def save_snow_plows(self, cycle_id: str, plows: list[SnowPlow]) -> None:
+        for p in plows:
+            self.table.put_item(
+                Item=_strip_none(
+                    {
+                        "PK": f"PLOW#{p.id}",
+                        "SK": cycle_id,
+                        "GSI1PK": f"CYCLE#{cycle_id}",
+                        "GSI1SK": f"PLOW#{p.id}",
+                        "plow_id": p.id,
+                        "name": p.name,
+                        "latitude": _decimal_safe(p.latitude),
+                        "longitude": _decimal_safe(p.longitude),
+                        "heading": _decimal_safe(p.heading),
+                        "speed": _decimal_safe(p.speed),
+                        "last_updated": p.last_updated,
+                    }
+                )
+            )
+
+    def get_snow_plows(self, cycle_id: str) -> list[SnowPlow]:
+        resp = self.table.query(
+            IndexName="GSI1",
+            KeyConditionExpression="GSI1PK = :pk AND begins_with(GSI1SK, :prefix)",
+            ExpressionAttributeValues={
+                ":pk": f"CYCLE#{cycle_id}",
+                ":prefix": "PLOW#",
+            },
+        )
+        return [
+            SnowPlow(
+                id=int(item.get("plow_id", 0)),
+                name=item.get("name", ""),
+                latitude=_float_safe(item.get("latitude")),
+                longitude=_float_safe(item.get("longitude")),
+                heading=_float_safe(item.get("heading")),
+                speed=_float_safe(item.get("speed")),
+                last_updated=item.get("last_updated", ""),
             )
             for item in resp.get("Items", [])
         ]

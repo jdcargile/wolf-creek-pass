@@ -132,6 +132,48 @@ class WeatherStation(BaseModel):
     relative_humidity: str = ""
 
 
+# ---- Mountain Passes ----
+
+
+class MountainPass(BaseModel):
+    """Mountain pass conditions from UDOT API."""
+
+    id: int = 0
+    name: str = ""
+    roadway: str = ""
+    elevation_ft: str = ""
+    latitude: float | None = None
+    longitude: float | None = None
+    # Weather data (from the pass's station)
+    air_temperature: str = ""
+    wind_speed: str = ""
+    wind_gust: str = ""
+    wind_direction: str = ""
+    surface_temp: str = ""
+    surface_status: str = ""
+    visibility: str = ""
+    # Forecasts (pipe-delimited from UDOT)
+    forecasts: str = ""
+    # Seasonal closure info
+    closure_status: str = ""  # "OPEN", "CLOSED", or ""
+    closure_description: str = ""
+
+
+# ---- Snow Plows ----
+
+
+class SnowPlow(BaseModel):
+    """A UDOT snow plow / service vehicle with real-time GPS position."""
+
+    id: int = 0
+    name: str = ""
+    latitude: float | None = None
+    longitude: float | None = None
+    heading: float | None = None
+    speed: float | None = None
+    last_updated: str = ""
+
+
 # ---- Capture Cycle Summary ----
 
 

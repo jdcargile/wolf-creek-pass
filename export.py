@@ -63,6 +63,8 @@ def export_cycle_json(
     conditions = storage.get_road_conditions(cycle.cycle_id)
     events = storage.get_events(cycle.cycle_id)
     weather = storage.get_weather(cycle.cycle_id)
+    passes = storage.get_mountain_passes(cycle.cycle_id)
+    plows = storage.get_snow_plows(cycle.cycle_id)
 
     return {
         "cycle": cycle.model_dump(),
@@ -71,6 +73,8 @@ def export_cycle_json(
         "conditions": [c.model_dump() for c in conditions],
         "events": [e.model_dump() for e in events],
         "weather": [w.model_dump() for w in weather],
+        "passes": [p.model_dump() for p in passes],
+        "plows": [p.model_dump() for p in plows],
     }
 
 

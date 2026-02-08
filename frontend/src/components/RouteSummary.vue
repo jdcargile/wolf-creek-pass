@@ -6,11 +6,21 @@ const store = useCycleStore()
 
 <template>
   <div class="route-summary" v-if="store.hasData">
-    <div class="stat" v-if="store.primaryRoute">
-      <span class="stat-value">{{ store.primaryRoute.name }}</span>
-      <span class="stat-label">primary route</span>
+    <!-- Wolf Creek status badge -->
+    <div class="stat" v-if="store.wolfCreekPass">
+      <span
+        class="stat-value stat-badge"
+        :class="store.wolfCreekClosed ? 'stat-badge--closed' : 'stat-badge--open'"
+      >
+        {{ store.wolfCreekClosed ? 'CLOSED' : 'OPEN' }}
+      </span>
+      <span class="stat-label">wolf creek</span>
     </div>
-    <div class="stat">
+    <div class="stat" v-if="store.wolfCreekPass?.air_temperature">
+      <span class="stat-value">{{ store.wolfCreekPass.air_temperature }}&deg;</span>
+      <span class="stat-label">pass temp</span>
+    </div>
+    <div class="stat" v-if="store.primaryRoute">
       <span class="stat-value">{{ store.distanceMiles }}</span>
       <span class="stat-label">miles</span>
     </div>
@@ -29,6 +39,10 @@ const store = useCycleStore()
     <div class="stat" v-if="store.currentCycle?.events.length">
       <span class="stat-value">{{ store.currentCycle.events.length }}</span>
       <span class="stat-label">events</span>
+    </div>
+    <div class="stat" v-if="store.plowCount > 0">
+      <span class="stat-value stat-plow">{{ store.plowCount }}</span>
+      <span class="stat-label">plows</span>
     </div>
   </div>
 </template>
@@ -66,5 +80,26 @@ const store = useCycleStore()
 
 .stat-danger .stat-value {
   color: var(--color-danger);
+}
+
+.stat-badge {
+  font-size: 0.85rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+}
+
+.stat-badge--open {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.stat-badge--closed {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.stat-plow {
+  color: #d97706;
 }
 </style>

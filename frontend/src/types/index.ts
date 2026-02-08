@@ -77,6 +77,35 @@ export interface WeatherStation {
   relative_humidity: string
 }
 
+export interface MountainPass {
+  id: number
+  name: string
+  roadway: string
+  elevation_ft: string
+  latitude: number | null
+  longitude: number | null
+  air_temperature: string
+  wind_speed: string
+  wind_gust: string
+  wind_direction: string
+  surface_temp: string
+  surface_status: string
+  visibility: string
+  forecasts: string
+  closure_status: string
+  closure_description: string
+}
+
+export interface SnowPlow {
+  id: number
+  name: string
+  latitude: number | null
+  longitude: number | null
+  heading: number | null
+  speed: number | null
+  last_updated: string
+}
+
 export interface CycleData {
   cycle: CycleSummary
   routes: Route[]
@@ -84,6 +113,8 @@ export interface CycleData {
   conditions: RoadCondition[]
   events: Event[]
   weather: WeatherStation[]
+  passes: MountainPass[]
+  plows: SnowPlow[]
 }
 
 export interface CycleIndex {

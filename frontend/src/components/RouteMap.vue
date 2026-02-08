@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { LMap, LTileLayer, LPolyline, LMarker, LPopup, LCircleMarker } from '@vue-leaflet/vue-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useCycleStore } from '@/stores/cycle'
-import type { CaptureRecord, Event as TrafficEvent, Route } from '@/types'
+import type { CaptureRecord, Event as TrafficEvent, MountainPass, SnowPlow, Route } from '@/types'
 
 const store = useCycleStore()
 
@@ -82,6 +82,19 @@ const eventMarkers = computed(() => {
   )
 })
 
+// Mountain pass markers
+const passMarkers = computed(() => {
+  return store.passes.filter((p) => p.latitude != null && p.longitude != null)
+})
+
+// Snow plow markers
+const plowMarkers = computed(() => {
+  if (!store.currentCycle?.plows) return []
+  return store.currentCycle.plows.filter(
+    (p) => p.latitude != null && p.longitude != null,
+  )
+})
+
 function cameraColor(capture: CaptureRecord): string {
   if (capture.has_snow) return '#dc2626'
   if (capture.has_animal) return '#ca8a04'
@@ -92,6 +105,13 @@ function eventColor(event: TrafficEvent): string {
   if (event.is_full_closure) return '#dc2626'
   if (event.event_type === 'accidentsAndIncidents') return '#ea580c'
   return '#f59e0b'
+}
+
+function passColor(p: MountainPass): string {
+  if (p.closure_status?.toUpperCase() === 'CLOSED') return '#dc2626'
+  const temp = parseInt(p.air_temperature)
+  if (!isNaN(temp) && temp <= 32) return '#3b82f6' // freezing = blue
+  return '#6b7280' // gray
 }
 
 function formatDuration(seconds: number): string {
@@ -133,6 +153,65 @@ function formatDistance(meters: number): string {
           </div>
         </LPopup>
       </LPolyline>
+
+      <!-- Mountain pass markers (diamond shape via rotated square) -->
+      <LCircleMarker
+        v-for="p in passMarkers"
+        :key="`pass-${p.id}`"
+        :lat-lng="[p.latitude!, p.longitude!]"
+        :radius="10"
+        :color="passColor(p)"
+        :fill-color="'#ffffff'"
+        :fill-opacity="0.95"
+        :weight="3"
+      >
+        <LPopup>
+          <div class="popup">
+            <strong>{{ p.name }}</strong>
+            <div class="popup-road">{{ p.elevation_ft }}' elev</div>
+            <div v-if="p.air_temperature" class="pass-temp">
+              {{ p.air_temperature }}&deg;F
+            </div>
+            <div class="popup-badges">
+              <span v-if="p.closure_status === 'CLOSED'" class="popup-tag popup-tag--danger">CLOSED</span>
+              <span v-else-if="p.closure_status === 'OPEN'" class="popup-tag popup-tag--open">OPEN</span>
+              <span v-if="p.surface_status" class="popup-tag">{{ p.surface_status }}</span>
+            </div>
+            <div v-if="p.wind_speed" class="popup-notes">
+              Wind: {{ p.wind_speed }} mph {{ p.wind_direction }}
+              <span v-if="p.wind_gust">(gusts {{ p.wind_gust }})</span>
+            </div>
+            <div v-if="p.visibility" class="popup-notes">
+              Visibility: {{ p.visibility }}
+            </div>
+          </div>
+        </LPopup>
+      </LCircleMarker>
+
+      <!-- Snow plow markers (yellow/orange triangles) -->
+      <LCircleMarker
+        v-for="plow in plowMarkers"
+        :key="`plow-${plow.id}`"
+        :lat-lng="[plow.latitude!, plow.longitude!]"
+        :radius="7"
+        :color="'#d97706'"
+        :fill-color="'#fbbf24'"
+        :fill-opacity="0.9"
+        :weight="2"
+      >
+        <LPopup>
+          <div class="popup">
+            <strong>Snow Plow</strong>
+            <div class="popup-road">{{ plow.name }}</div>
+            <div v-if="plow.speed != null" class="popup-notes">
+              Speed: {{ plow.speed }} mph
+            </div>
+            <div v-if="plow.last_updated" class="popup-notes">
+              Updated: {{ plow.last_updated }}
+            </div>
+          </div>
+        </LPopup>
+      </LCircleMarker>
 
       <!-- Camera markers -->
       <LCircleMarker
@@ -201,6 +280,10 @@ function formatDistance(meters: number): string {
           {{ formatDuration(r.duration_in_traffic_s || r.duration_s) }}
         </span>
       </div>
+      <div v-if="plowMarkers.length" class="legend-item">
+        <span class="legend-swatch legend-swatch--plow"></span>
+        <span class="legend-label">Plows ({{ plowMarkers.length }})</span>
+      </div>
     </div>
   </div>
 </template>
@@ -258,6 +341,17 @@ function formatDistance(meters: number): string {
   color: #ca8a04;
 }
 
+.popup-tag--open {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.pass-temp {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0.2rem 0;
+}
+
 .popup-notes {
   margin: 0.3rem 0;
   font-size: 0.75rem;
@@ -300,6 +394,14 @@ function formatDistance(meters: number): string {
   height: 4px;
   border-radius: 2px;
   flex-shrink: 0;
+}
+
+.legend-swatch--plow {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #fbbf24;
+  border: 2px solid #d97706;
 }
 
 .legend-label {

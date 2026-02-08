@@ -7,8 +7,10 @@ from models import (
     CaptureRecord,
     CycleSummary,
     Event,
+    MountainPass,
     RoadCondition,
     Route,
+    SnowPlow,
     WeatherStation,
 )
 
@@ -102,3 +104,46 @@ class TestWeatherStation:
     def test_construction(self):
         w = WeatherStation(id=1, station_name="Wolf Creek Pass", air_temperature="28")
         assert w.air_temperature == "28"
+
+
+class TestMountainPass:
+    def test_defaults(self):
+        p = MountainPass()
+        assert p.id == 0
+        assert p.name == ""
+        assert p.closure_status == ""
+        assert p.latitude is None
+
+    def test_full(self, sample_mountain_pass):
+        assert sample_mountain_pass.id == 44
+        assert sample_mountain_pass.name == "Wolf Creek Pass"
+        assert sample_mountain_pass.elevation_ft == "9485"
+        assert sample_mountain_pass.air_temperature == "25"
+        assert sample_mountain_pass.closure_status == "OPEN"
+
+    def test_serialization_roundtrip(self, sample_mountain_pass):
+        data = sample_mountain_pass.model_dump()
+        p2 = MountainPass.model_validate(data)
+        assert p2.name == sample_mountain_pass.name
+        assert p2.closure_status == sample_mountain_pass.closure_status
+
+
+class TestSnowPlow:
+    def test_defaults(self):
+        p = SnowPlow()
+        assert p.id == 0
+        assert p.name == ""
+        assert p.latitude is None
+        assert p.speed is None
+
+    def test_full(self, sample_snow_plow):
+        assert sample_snow_plow.id == 501
+        assert sample_snow_plow.name == "Plow Unit 42"
+        assert sample_snow_plow.speed == 25.0
+        assert sample_snow_plow.last_updated == "2026-02-07T12:30:00"
+
+    def test_serialization_roundtrip(self, sample_snow_plow):
+        data = sample_snow_plow.model_dump()
+        p2 = SnowPlow.model_validate(data)
+        assert p2.id == sample_snow_plow.id
+        assert p2.speed == sample_snow_plow.speed

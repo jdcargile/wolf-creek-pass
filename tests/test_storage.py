@@ -6,9 +6,11 @@ from models import (
     CameraView,
     CaptureRecord,
     CycleSummary,
-    Route,
-    RoadCondition,
     Event,
+    MountainPass,
+    RoadCondition,
+    Route,
+    SnowPlow,
     WeatherStation,
 )
 from settings import Settings
@@ -169,6 +171,57 @@ class TestSQLiteStorageImages:
         assert "test.jpg" in url
         # Verify file was written
         assert (tmp_path / "images" / "test.jpg").read_bytes() == b"fake-jpeg-data"
+
+
+class TestSQLiteStoragePasses:
+    def test_save_and_get(self, sqlite_storage, sample_mountain_passes):
+        sqlite_storage.save_mountain_passes("cycle-1", sample_mountain_passes)
+        passes = sqlite_storage.get_mountain_passes("cycle-1")
+        assert len(passes) == 2
+        assert passes[0].name == "Wolf Creek Pass"
+        assert passes[0].air_temperature == "25"
+        assert passes[1].name == "Parley's Summit"
+
+    def test_empty_cycle(self, sqlite_storage):
+        assert sqlite_storage.get_mountain_passes("nonexistent") == []
+
+    def test_full_fields(self, sqlite_storage, sample_mountain_pass):
+        sqlite_storage.save_mountain_passes("cycle-1", [sample_mountain_pass])
+        passes = sqlite_storage.get_mountain_passes("cycle-1")
+        assert len(passes) == 1
+        p = passes[0]
+        assert p.id == 44
+        assert p.roadway == "SR-35"
+        assert p.elevation_ft == "9485"
+        assert p.wind_speed == "15"
+        assert p.wind_gust == "30"
+        assert p.surface_status == "Snow/Ice"
+        assert p.visibility == "0.5 mi"
+        assert p.closure_status == "OPEN"
+
+
+class TestSQLiteStoragePlows:
+    def test_save_and_get(self, sqlite_storage, sample_snow_plows):
+        sqlite_storage.save_snow_plows("cycle-1", sample_snow_plows)
+        plows = sqlite_storage.get_snow_plows("cycle-1")
+        assert len(plows) == 2
+        assert plows[0].name == "Plow Unit 42"
+        assert plows[0].speed == 25.0
+        assert plows[1].name == "Plow Unit 99"
+
+    def test_empty_cycle(self, sqlite_storage):
+        assert sqlite_storage.get_snow_plows("nonexistent") == []
+
+    def test_full_fields(self, sqlite_storage, sample_snow_plow):
+        sqlite_storage.save_snow_plows("cycle-1", [sample_snow_plow])
+        plows = sqlite_storage.get_snow_plows("cycle-1")
+        assert len(plows) == 1
+        p = plows[0]
+        assert p.id == 501
+        assert p.latitude == 40.37
+        assert p.longitude == -111.12
+        assert p.heading == 180.0
+        assert p.last_updated == "2026-02-07T12:30:00"
 
 
 class TestSQLiteStorageImageHashes:

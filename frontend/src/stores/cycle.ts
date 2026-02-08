@@ -2,7 +2,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { CycleData, CycleSummary, Route } from '@/types'
+import type { CycleData, CycleSummary, Route, MountainPass } from '@/types'
 import { fetchCycleIndex, fetchCycleData, fetchLatestCycle } from '@/composables/useApi'
 
 export const useCycleStore = defineStore('cycle', () => {
@@ -26,6 +26,16 @@ export const useCycleStore = defineStore('cycle', () => {
     const m = currentCycle.value?.cycle.distance_m
     return m ? (m / 1609.34).toFixed(1) : null
   })
+
+  // Mountain pass helpers
+  const passes = computed<MountainPass[]>(() => currentCycle.value?.passes ?? [])
+  const wolfCreekPass = computed<MountainPass | null>(() =>
+    passes.value.find((p) => p.name.toLowerCase().includes('wolf creek')) ?? null,
+  )
+  const wolfCreekClosed = computed(
+    () => wolfCreekPass.value?.closure_status?.toUpperCase() === 'CLOSED',
+  )
+  const plowCount = computed(() => currentCycle.value?.plows?.length ?? 0)
 
   // Actions
   async function loadLatest() {
@@ -73,6 +83,10 @@ export const useCycleStore = defineStore('cycle', () => {
     cameraCount,
     travelTimeMin,
     distanceMiles,
+    passes,
+    wolfCreekPass,
+    wolfCreekClosed,
+    plowCount,
     loadLatest,
     loadCycle,
     loadIndex,

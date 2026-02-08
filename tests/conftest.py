@@ -10,8 +10,10 @@ from models import (
     CaptureRecord,
     CycleSummary,
     Event,
+    MountainPass,
     RoadCondition,
     Route,
+    SnowPlow,
     WeatherStation,
 )
 
@@ -180,6 +182,91 @@ def sample_weather():
             station_name="Daniels Summit",
             air_temperature="32",
             surface_status="Wet",
+        ),
+    ]
+
+
+@pytest.fixture
+def sample_mountain_pass():
+    return MountainPass(
+        id=44,
+        name="Wolf Creek Pass",
+        roadway="SR-35",
+        elevation_ft="9485",
+        latitude=40.3712,
+        longitude=-111.1156,
+        air_temperature="25",
+        wind_speed="15",
+        wind_gust="30",
+        wind_direction="NW",
+        surface_temp="22",
+        surface_status="Snow/Ice",
+        visibility="0.5 mi",
+        forecasts="Snow expected through evening",
+        closure_status="OPEN",
+        closure_description="",
+    )
+
+
+@pytest.fixture
+def sample_mountain_passes():
+    return [
+        MountainPass(
+            id=44,
+            name="Wolf Creek Pass",
+            roadway="SR-35",
+            elevation_ft="9485",
+            latitude=40.3712,
+            longitude=-111.1156,
+            air_temperature="25",
+            closure_status="OPEN",
+        ),
+        MountainPass(
+            id=10,
+            name="Parley's Summit",
+            roadway="I-80",
+            elevation_ft="7100",
+            latitude=40.745,
+            longitude=-111.627,
+            air_temperature="32",
+            closure_status="OPEN",
+        ),
+    ]
+
+
+@pytest.fixture
+def sample_snow_plow():
+    return SnowPlow(
+        id=501,
+        name="Plow Unit 42",
+        latitude=40.37,
+        longitude=-111.12,
+        heading=180.0,
+        speed=25.0,
+        last_updated="2026-02-07T12:30:00",
+    )
+
+
+@pytest.fixture
+def sample_snow_plows():
+    return [
+        SnowPlow(
+            id=501,
+            name="Plow Unit 42",
+            latitude=40.37,
+            longitude=-111.12,
+            heading=180.0,
+            speed=25.0,
+            last_updated="2026-02-07T12:30:00",
+        ),
+        SnowPlow(
+            id=502,
+            name="Plow Unit 99",
+            latitude=40.38,
+            longitude=-111.10,
+            heading=90.0,
+            speed=30.0,
+            last_updated="2026-02-07T12:31:00",
         ),
     ]
 

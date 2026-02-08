@@ -10,7 +10,15 @@ from __future__ import annotations
 import requests
 from rich.console import Console
 
-from models import Camera, CameraView, Event, RoadCondition, WeatherStation
+from models import (
+    Camera,
+    CameraView,
+    Event,
+    MountainPass,
+    RoadCondition,
+    SnowPlow,
+    WeatherStation,
+)
 from route import (
     filter_cameras_by_route,
     min_distance_to_route,
@@ -205,13 +213,75 @@ def fetch_route_weather(
 # ---- Mountain Passes ----
 
 
-def fetch_mountain_pass_info(api_key: str) -> dict | None:
-    """Fetch Wolf Creek Pass mountain pass data specifically."""
+# Passes along JD's routes (by keyword in the UDOT pass name)
+ROUTE_PASS_KEYWORDS = {
+    "wolf creek",
+    "parley",
+    "daniels",
+    "provo canyon",
+    "mayflower",
+    "sr-248",
+    "pinion",
+}
+
+
+def _parse_mountain_pass(item: dict) -> MountainPass:
+    """Parse a single UDOT mountain pass dict into a MountainPass model."""
+    seasonal_info = item.get("SeasonalInfo") or []
+    closure_status = ""
+    closure_desc = ""
+    if seasonal_info:
+        closure_status = seasonal_info[0].get("SeasonalClosureStatus", "")
+        closure_desc = seasonal_info[0].get("SeasonalClosureDescription", "")
+
+    return MountainPass(
+        id=item.get("Id", 0),
+        name=item.get("Name", ""),
+        roadway=item.get("Roadway", ""),
+        elevation_ft=item.get("MaxElevation", ""),
+        latitude=item.get("Latitude"),
+        longitude=item.get("Longitude"),
+        air_temperature=item.get("AirTemperature") or "",
+        wind_speed=item.get("WindSpeed") or "",
+        wind_gust=item.get("WindGust") or "",
+        wind_direction=item.get("WindDirection") or "",
+        surface_temp=item.get("SurfaceTemp") or "",
+        surface_status=item.get("SurfaceStatus") or "",
+        visibility=item.get("Visibility") or "",
+        forecasts=item.get("Forecasts") or "",
+        closure_status=closure_status,
+        closure_description=closure_desc,
+    )
+
+
+def fetch_all_mountain_passes(api_key: str) -> list[MountainPass]:
+    """Fetch all mountain passes from UDOT."""
     raw = _fetch("mountainpasses", api_key)
-    for item in raw:
-        if "wolf creek" in item.get("Name", "").lower():
-            return item
-    return None
+    return [_parse_mountain_pass(item) for item in raw]
+
+
+def fetch_route_passes(api_key: str) -> list[MountainPass]:
+    """Fetch mountain passes along JD's routes."""
+    all_passes = fetch_all_mountain_passes(api_key)
+    return [
+        p for p in all_passes if any(kw in p.name.lower() for kw in ROUTE_PASS_KEYWORDS)
+    ]
+
+
+def is_wolf_creek_closed(api_key: str) -> bool:
+    """Check if Wolf Creek Pass (SR-35) is currently closed."""
+    all_passes = fetch_all_mountain_passes(api_key)
+    for p in all_passes:
+        if "wolf creek" in p.name.lower():
+            if p.closure_status.upper() == "CLOSED":
+                console.print("[red bold]Wolf Creek Pass is CLOSED[/red bold]")
+                return True
+            console.print(
+                f"Wolf Creek Pass status: [green]{p.closure_status or 'OPEN'}[/green]"
+            )
+            return False
+    console.print("[yellow]Wolf Creek Pass not found in UDOT data[/yellow]")
+    return False
 
 
 # ---- Alerts ----
@@ -225,27 +295,44 @@ def fetch_alerts(api_key: str) -> list[dict]:
 # ---- Snow Plows ----
 
 
-def fetch_snow_plows(api_key: str) -> list[dict]:
-    """Fetch real-time snow plow positions."""
-    return _fetch("servicevehicles", api_key)
+def fetch_all_snow_plows(api_key: str) -> list[SnowPlow]:
+    """Fetch all real-time snow plow positions."""
+    raw = _fetch("servicevehicles", api_key)
+    return [
+        SnowPlow(
+            id=item.get("Id", 0),
+            name=item.get("Name", ""),
+            latitude=item.get("Latitude"),
+            longitude=item.get("Longitude"),
+            heading=item.get("Heading"),
+            speed=item.get("Speed"),
+            last_updated=item.get("LastUpdated", ""),
+        )
+        for item in raw
+    ]
 
 
 def fetch_route_plows(
-    api_key: str, route: Route, buffer_km: float = 10.0
-) -> list[dict]:
-    """Fetch snow plows near the route."""
-    all_plows = fetch_snow_plows(api_key)
-    route_points = decode_route_points(route)
-    if not route_points:
+    api_key: str, routes: list[Route], buffer_km: float = 10.0
+) -> list[SnowPlow]:
+    """Fetch snow plows near any of the given routes."""
+    all_plows = fetch_all_snow_plows(api_key)
+    if not all_plows:
+        return []
+
+    # Build a combined set of route points from all routes
+    all_route_points: list[tuple[float, float]] = []
+    for route in routes:
+        all_route_points.extend(decode_route_points(route))
+
+    if not all_route_points:
         return all_plows
 
     return [
         p
         for p in all_plows
-        if p.get("Latitude") is not None
-        and p.get("Longitude") is not None
-        and min_distance_to_route(
-            float(p["Latitude"]), float(p["Longitude"]), route_points
-        )
+        if p.latitude is not None
+        and p.longitude is not None
+        and min_distance_to_route(p.latitude, p.longitude, all_route_points)
         <= buffer_km
     ]
