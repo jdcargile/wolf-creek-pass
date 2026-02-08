@@ -69,6 +69,8 @@ onMounted(async () => {
               'pass-card--closed': p.closure_status === 'CLOSED',
               'pass-card--cold': p.air_temperature && parseInt(p.air_temperature) <= 32,
             }"
+            :style="p.latitude != null && p.longitude != null ? 'cursor: pointer' : ''"
+            @click="p.latitude != null && p.longitude != null && store.flyTo(p.latitude!, p.longitude!)"
           >
             <div class="pass-header">
               <div class="pass-name">{{ p.name }}</div>
@@ -77,25 +79,25 @@ onMounted(async () => {
                 class="pass-status"
                 :class="p.closure_status === 'CLOSED' ? 'pass-status--closed' : 'pass-status--open'"
               >
-                {{ p.closure_status === 'CLOSED' ? '🔴 CLOSED' : '🟢 OPEN' }}
+                {{ p.closure_status }}
               </span>
             </div>
             <div class="pass-elev">{{ p.roadway }} · {{ p.elevation_ft }}'</div>
             <div class="pass-temp" v-if="p.air_temperature">
-              🌡️ {{ p.air_temperature }}°F
+              {{ p.air_temperature }}°F
               <span v-if="p.surface_temp" class="pass-surface-temp">
                 (road {{ p.surface_temp }}°F)
               </span>
             </div>
             <div class="pass-detail" v-if="p.surface_status">
-              🛣️ {{ p.surface_status }}
+              Surface: {{ p.surface_status }}
             </div>
             <div class="pass-detail" v-if="p.wind_speed">
-              💨 {{ p.wind_speed }} mph {{ p.wind_direction }}
+              Wind: {{ p.wind_speed }} mph {{ p.wind_direction }}
               <span v-if="p.wind_gust">(gusts {{ p.wind_gust }})</span>
             </div>
             <div class="pass-detail" v-if="p.visibility">
-              👁️ {{ p.visibility }} mi visibility
+              Visibility: {{ p.visibility }} mi
             </div>
             <div v-if="p.forecasts" class="pass-forecasts">
               <div
@@ -115,11 +117,11 @@ onMounted(async () => {
       </section>
 
       <!-- Weather stations -->
-      <section v-if="store.currentCycle?.weather?.length" class="weather-section">
+      <section v-if="store.weather.length" class="weather-section">
         <h2>🌤️ Weather Stations</h2>
         <div class="weather-grid">
           <div
-            v-for="w in store.currentCycle.weather"
+            v-for="w in store.weather"
             :key="w.id"
             class="weather-card"
           >
@@ -128,13 +130,13 @@ onMounted(async () => {
               {{ w.air_temperature }}°F
             </div>
             <div class="weather-detail" v-if="w.surface_status">
-              🛣️ {{ w.surface_status }}
+              Surface: {{ w.surface_status }}
             </div>
             <div class="weather-detail" v-if="w.wind_speed_avg">
-              💨 {{ w.wind_speed_avg }} mph {{ w.wind_direction }}
+              Wind: {{ w.wind_speed_avg }} mph {{ w.wind_direction }}
             </div>
             <div class="weather-detail" v-if="w.precipitation">
-              🌧️ {{ w.precipitation }}
+              Precip: {{ w.precipitation }}
             </div>
           </div>
         </div>
@@ -148,6 +150,7 @@ onMounted(async () => {
             v-for="capture in store.currentCycle?.captures"
             :key="capture.camera_id"
             :capture="capture"
+            @click="capture.latitude != null && capture.longitude != null && store.flyTo(capture.latitude!, capture.longitude!)"
           />
         </div>
       </section>

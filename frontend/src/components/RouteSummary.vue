@@ -12,32 +12,32 @@ const store = useCycleStore()
         class="stat-value stat-badge"
         :class="store.wolfCreekClosed ? 'stat-badge--closed' : 'stat-badge--open'"
       >
-        {{ store.wolfCreekClosed ? '🔴 CLOSED' : '🟢 OPEN' }}
+        {{ store.wolfCreekClosed ? 'CLOSED' : 'OPEN' }}
       </span>
       <span class="stat-label">wolf creek</span>
     </div>
     <div class="stat" v-if="store.wolfCreekPass?.air_temperature">
-      <span class="stat-value">🌡️ {{ store.wolfCreekPass.air_temperature }}°</span>
+      <span class="stat-value">{{ store.wolfCreekPass.air_temperature }}°</span>
       <span class="stat-label">pass temp</span>
     </div>
     <div class="stat" v-if="store.selectedRoute">
-      <span class="stat-value">📏 {{ store.distanceDisplay || store.distanceMiles + ' mi' }}</span>
+      <span class="stat-value">{{ store.distanceDisplay || store.distanceMiles + ' mi' }}</span>
       <span class="stat-label">distance</span>
     </div>
     <div class="stat">
-      <span class="stat-value">🚗 {{ store.travelTimeDisplay || (store.travelTimeMin ? store.travelTimeMin + 'm' : '--') }}</span>
+      <span class="stat-value">{{ store.travelTimeDisplay || (store.travelTimeMin ? store.travelTimeMin + 'm' : '--') }}</span>
       <span class="stat-label">drive time</span>
     </div>
     <div class="stat">
-      <span class="stat-value">📷 {{ store.cameraCount }}</span>
+      <span class="stat-value">{{ store.cameraCount }}</span>
       <span class="stat-label">cameras</span>
     </div>
     <div class="stat" :class="{ 'stat-danger': store.snowCount > 0 }">
-      <span class="stat-value">{{ store.snowCount > 0 ? '❄️' : '☀️' }} {{ store.snowCount }}</span>
+      <span class="stat-value">{{ store.snowCount }}</span>
       <span class="stat-label">{{ store.snowCount > 0 ? 'snow!' : 'clear' }}</span>
     </div>
     <div class="stat" v-if="store.plowCount > 0">
-      <span class="stat-value stat-plow">🚜 {{ store.plowCount }}</span>
+      <span class="stat-value stat-plow">{{ store.plowCount }}</span>
       <span class="stat-label">plows out</span>
     </div>
   </div>

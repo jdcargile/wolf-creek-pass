@@ -4,10 +4,14 @@ import type { CaptureRecord } from '@/types'
 defineProps<{
   capture: CaptureRecord
 }>()
+
+const emit = defineEmits<{
+  click: []
+}>()
 </script>
 
 <template>
-  <div class="camera-card" :class="{ 'camera-card--snow': capture.has_snow }">
+  <div class="camera-card" :class="{ 'camera-card--snow': capture.has_snow }" @click="emit('click')" style="cursor: pointer">
     <div class="camera-image">
       <img
         v-if="capture.image_url"
@@ -15,7 +19,7 @@ defineProps<{
         :alt="`Camera ${capture.camera_id} - ${capture.location}`"
         loading="lazy"
       />
-      <div v-else class="camera-image-placeholder">📷 No Image</div>
+      <div v-else class="camera-image-placeholder">No Image</div>
       <!-- Floating snow/animal badge on image -->
       <span v-if="capture.has_snow" class="camera-floating-badge camera-floating-badge--snow">❄️</span>
       <span v-else-if="capture.has_animal" class="camera-floating-badge camera-floating-badge--animal">🦌</span>
@@ -28,11 +32,11 @@ defineProps<{
         {{ capture.roadway }} {{ capture.direction }}
       </div>
       <div class="camera-badges">
-        <span v-if="capture.has_snow" class="cam-badge cam-badge--danger">❄️ Snow</span>
-        <span v-if="capture.has_car" class="cam-badge cam-badge--info">🚗 Cars</span>
-        <span v-if="capture.has_truck" class="cam-badge cam-badge--info">🚛 Trucks</span>
-        <span v-if="capture.has_animal" class="cam-badge cam-badge--warning">🦌 Animals</span>
-        <span v-if="!capture.has_snow && !capture.has_car && !capture.has_truck && !capture.has_animal" class="cam-badge cam-badge--clear">✨ Clear</span>
+        <span v-if="capture.has_snow" class="cam-badge cam-badge--danger">Snow</span>
+        <span v-if="capture.has_car" class="cam-badge cam-badge--info">Cars</span>
+        <span v-if="capture.has_truck" class="cam-badge cam-badge--info">Trucks</span>
+        <span v-if="capture.has_animal" class="cam-badge cam-badge--warning">Animals</span>
+        <span v-if="!capture.has_snow && !capture.has_car && !capture.has_truck && !capture.has_animal" class="cam-badge cam-badge--clear">Clear</span>
       </div>
       <div class="camera-notes" v-if="capture.analysis_notes">
         {{ capture.analysis_notes }}

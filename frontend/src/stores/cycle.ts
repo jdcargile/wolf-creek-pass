@@ -2,8 +2,15 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { CycleData, CycleSummary, Route, MountainPass, SnowPlow, CaptureRecord } from '@/types'
+import type { CycleData, CycleSummary, Route, MountainPass, SnowPlow, CaptureRecord, WeatherStation } from '@/types'
 import { fetchCycleIndex, fetchCycleData, fetchLatestCycle } from '@/composables/useApi'
+
+/** Weather station names we care about (must match UDOT exactly, case-insensitive). */
+const WEATHER_STATION_NAMES = new Set([
+  'i-80 @ parleys summit',
+  'sr-35 @ wolf creek',
+  'sr-35 @ wolf creek pass',
+])
 
 export const useCycleStore = defineStore('cycle', () => {
   // State
@@ -12,6 +19,9 @@ export const useCycleStore = defineStore('cycle', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
   const selectedRouteId = ref<string | null>(null)
+
+  // Map focus: set to fly the map to a lat/lng. Incremented counter forces reactivity.
+  const mapFocus = ref<{ lat: number; lng: number; zoom: number; _seq: number } | null>(null)
 
   // --- Core getters ---
   const hasData = computed(() => currentCycle.value !== null)
@@ -60,6 +70,12 @@ export const useCycleStore = defineStore('cycle', () => {
   // All captures from the cycle data
   const captures = computed<CaptureRecord[]>(() => currentCycle.value?.captures ?? [])
 
+  // Filtered weather stations (only the 3 we care about)
+  const weather = computed<WeatherStation[]>(() => {
+    const all = currentCycle.value?.weather ?? []
+    return all.filter((w) => WEATHER_STATION_NAMES.has(w.station_name.toLowerCase()))
+  })
+
   // Camera and snow counts
   const cameraCount = computed(() => currentCycle.value?.cycle.cameras_processed ?? 0)
   const snowCount = computed(() => currentCycle.value?.cycle.snow_count ?? 0)
@@ -74,8 +90,15 @@ export const useCycleStore = defineStore('cycle', () => {
 
   // --- Actions ---
 
+  let _focusSeq = 0
+
   function selectRoute(routeId: string | null) {
     selectedRouteId.value = routeId
+  }
+
+  function flyTo(lat: number, lng: number, zoom: number = 14) {
+    _focusSeq++
+    mapFocus.value = { lat, lng, zoom, _seq: _focusSeq }
   }
 
   async function loadLatest() {
@@ -126,6 +149,7 @@ export const useCycleStore = defineStore('cycle', () => {
     loading,
     error,
     selectedRouteId,
+    mapFocus,
     // Getters
     hasData,
     routes,
@@ -138,12 +162,14 @@ export const useCycleStore = defineStore('cycle', () => {
     plows,
     plowCount,
     captures,
+    weather,
     cameraCount,
     snowCount,
     wolfCreekPass,
     wolfCreekClosed,
     // Actions
     selectRoute,
+    flyTo,
     loadLatest,
     loadCycle,
     loadIndex,

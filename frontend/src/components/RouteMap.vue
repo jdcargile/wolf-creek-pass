@@ -1,23 +1,25 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { LMap, LTileLayer, LPolyline, LMarker, LPopup, LCircleMarker } from '@vue-leaflet/vue-leaflet'
-import * as L from 'leaflet'
+import { computed, ref, watch } from 'vue'
+import { LMap, LTileLayer, LPolyline, LPopup, LCircleMarker } from '@vue-leaflet/vue-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useCycleStore } from '@/stores/cycle'
 import type { CaptureRecord, MountainPass, Route } from '@/types'
 
 const store = useCycleStore()
+const mapRef = ref<InstanceType<typeof LMap> | null>(null)
 
-// --- Emoji marker icon factory ---
-function emojiIcon(emoji: string, size: number = 28): L.DivIcon {
-  return L.divIcon({
-    html: `<span style="font-size:${size}px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.3))">${emoji}</span>`,
-    className: 'emoji-marker',
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size / 2],
-    popupAnchor: [0, -size / 2],
-  })
-}
+// Watch for flyTo requests from the store
+watch(
+  () => store.mapFocus,
+  (focus) => {
+    if (focus && mapRef.value) {
+      const leaflet = (mapRef.value as any).leafletObject
+      if (leaflet) {
+        leaflet.flyTo([focus.lat, focus.lng], focus.zoom, { duration: 1 })
+      }
+    }
+  },
+)
 
 // --- Polyline decoding ---
 function decodePolyline(encoded: string): [number, number][] {
@@ -107,18 +109,18 @@ const plowMarkers = computed(() => {
   )
 })
 
-// --- Icon getters ---
-function cameraIcon(capture: CaptureRecord): L.DivIcon {
-  if (capture.has_snow) return emojiIcon('🥶', 26)
-  if (capture.has_animal) return emojiIcon('🦌', 26)
-  return emojiIcon('📷', 24)
+// --- Color helpers ---
+function cameraColor(capture: CaptureRecord): string {
+  if (capture.has_snow) return '#dc2626'
+  if (capture.has_animal) return '#ca8a04'
+  return '#16a34a'
 }
 
-function passIcon(p: MountainPass): L.DivIcon {
-  if (p.closure_status?.toUpperCase() === 'CLOSED') return emojiIcon('🚫', 28)
+function passColor(p: MountainPass): string {
+  if (p.closure_status?.toUpperCase() === 'CLOSED') return '#dc2626'
   const temp = parseInt(p.air_temperature)
-  if (!isNaN(temp) && temp <= 32) return emojiIcon('🥶', 28)
-  return emojiIcon('⛰️', 28)
+  if (!isNaN(temp) && temp <= 32) return '#3b82f6'
+  return '#6b7280'
 }
 
 function formatDuration(seconds: number): string {
@@ -134,7 +136,7 @@ function formatDistance(meters: number): string {
 
 <template>
   <div class="map-container">
-    <LMap :zoom="10" :center="center" :use-global-leaflet="false">
+    <LMap ref="mapRef" :zoom="10" :center="center" :use-global-leaflet="false">
       <LTileLayer
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         attribution="&copy; OpenStreetMap contributors"
@@ -154,81 +156,92 @@ function formatDistance(meters: number): string {
           <div class="popup">
             <strong>{{ dr.route.name }}</strong>
             <div v-if="dr.route.distance_m" class="popup-road">
-              {{ dr.route.distance_display || formatDistance(dr.route.distance_m) }} ·
+              {{ dr.route.distance_display || formatDistance(dr.route.distance_m) }} &middot;
               {{ dr.route.travel_time_display || formatDuration(dr.route.duration_s) }}
             </div>
           </div>
         </LPopup>
       </LPolyline>
 
-      <!-- Mountain pass markers (emoji) -->
-      <LMarker
+      <!-- Mountain pass markers (larger, white-filled circles with colored border) -->
+      <LCircleMarker
         v-for="p in passMarkers"
         :key="`pass-${p.id}`"
         :lat-lng="[p.latitude!, p.longitude!]"
-        :icon="passIcon(p)"
+        :radius="10"
+        :color="passColor(p)"
+        :fill-color="'#ffffff'"
+        :fill-opacity="0.95"
+        :weight="3"
       >
         <LPopup>
           <div class="popup">
-            <strong>⛰️ {{ p.name }}</strong>
+            <strong>{{ p.name }}</strong>
             <div class="popup-road">{{ p.elevation_ft }}' elev</div>
             <div v-if="p.air_temperature" class="pass-temp">
-              🌡️ {{ p.air_temperature }}°F
+              {{ p.air_temperature }}&deg;F
             </div>
             <div class="popup-badges">
-              <span v-if="p.closure_status === 'CLOSED'" class="popup-tag popup-tag--danger">🚫 CLOSED</span>
-              <span v-else-if="p.closure_status === 'OPEN'" class="popup-tag popup-tag--open">🟢 OPEN</span>
-              <span v-if="p.surface_status" class="popup-tag">🛣️ {{ p.surface_status }}</span>
+              <span v-if="p.closure_status === 'CLOSED'" class="popup-tag popup-tag--danger">CLOSED</span>
+              <span v-else-if="p.closure_status === 'OPEN'" class="popup-tag popup-tag--open">OPEN</span>
+              <span v-if="p.surface_status" class="popup-tag">{{ p.surface_status }}</span>
             </div>
             <div v-if="p.wind_speed" class="popup-notes">
-              💨 {{ p.wind_speed }} mph {{ p.wind_direction }}
+              Wind: {{ p.wind_speed }} mph {{ p.wind_direction }}
               <span v-if="p.wind_gust">(gusts {{ p.wind_gust }})</span>
             </div>
             <div v-if="p.visibility" class="popup-notes">
-              👁️ Visibility: {{ p.visibility }}
+              Visibility: {{ p.visibility }}
             </div>
           </div>
         </LPopup>
-      </LMarker>
+      </LCircleMarker>
 
-      <!-- Snow plow markers (emoji) -->
-      <LMarker
+      <!-- Snow plow markers (smaller, yellow/orange filled circles) -->
+      <LCircleMarker
         v-for="plow in plowMarkers"
         :key="`plow-${plow.id}`"
         :lat-lng="[plow.latitude!, plow.longitude!]"
-        :icon="emojiIcon('🚜', 24)"
+        :radius="7"
+        :color="'#d97706'"
+        :fill-color="'#fbbf24'"
+        :fill-opacity="0.9"
+        :weight="2"
       >
         <LPopup>
           <div class="popup">
-            <strong>🚜 Snow Plow</strong>
+            <strong>Snow Plow</strong>
             <div class="popup-road">{{ plow.name }}</div>
             <div v-if="plow.speed != null" class="popup-notes">
-              🏎️ {{ plow.speed }} mph
+              Speed: {{ plow.speed }} mph
             </div>
             <div v-if="plow.last_updated" class="popup-notes">
-              🕐 {{ plow.last_updated }}
+              Updated: {{ plow.last_updated }}
             </div>
           </div>
         </LPopup>
-      </LMarker>
+      </LCircleMarker>
 
-      <!-- Camera markers (emoji) -->
-      <LMarker
+      <!-- Camera markers (colored filled circles) -->
+      <LCircleMarker
         v-for="capture in cameraMarkers"
         :key="`cam-${capture.camera_id}`"
         :lat-lng="[capture.latitude!, capture.longitude!]"
-        :icon="cameraIcon(capture)"
+        :radius="8"
+        :color="cameraColor(capture)"
+        :fill-color="cameraColor(capture)"
+        :fill-opacity="0.8"
       >
         <LPopup>
           <div class="popup">
-            <strong>📷 {{ capture.location }}</strong>
+            <strong>{{ capture.location }}</strong>
             <br />
             <span class="popup-road">{{ capture.roadway }} {{ capture.direction }}</span>
             <div class="popup-badges">
-              <span v-if="capture.has_snow" class="popup-tag popup-tag--danger">❄️ Snow</span>
-              <span v-if="capture.has_car" class="popup-tag">🚗 Cars</span>
-              <span v-if="capture.has_truck" class="popup-tag">🚛 Trucks</span>
-              <span v-if="capture.has_animal" class="popup-tag popup-tag--warning">🦌 Animals</span>
+              <span v-if="capture.has_snow" class="popup-tag popup-tag--danger">Snow</span>
+              <span v-if="capture.has_car" class="popup-tag">Cars</span>
+              <span v-if="capture.has_truck" class="popup-tag">Trucks</span>
+              <span v-if="capture.has_animal" class="popup-tag popup-tag--warning">Animals</span>
             </div>
             <p v-if="capture.analysis_notes" class="popup-notes">{{ capture.analysis_notes }}</p>
             <img
@@ -239,7 +252,7 @@ function formatDistance(meters: number): string {
             />
           </div>
         </LPopup>
-      </LMarker>
+      </LCircleMarker>
     </LMap>
 
     <!-- Route legend -->
@@ -257,10 +270,9 @@ function formatDistance(meters: number): string {
           {{ r.travel_time_display || formatDuration(r.duration_s) }}
         </span>
       </div>
-      <div class="legend-item legend-item--icons">
-        <span>📷 cam</span>
-        <span>⛰️ pass</span>
-        <span v-if="plowMarkers.length">🚜 plow</span>
+      <div v-if="plowMarkers.length" class="legend-item">
+        <span class="legend-swatch legend-swatch--plow"></span>
+        <span class="legend-label">Plows ({{ plowMarkers.length }})</span>
       </div>
     </div>
   </div>
@@ -280,15 +292,6 @@ function formatDistance(meters: number): string {
   .map-container {
     height: 520px;
   }
-}
-
-/* Remove default leaflet icon background/border for our emoji markers */
-:deep(.emoji-marker) {
-  background: none !important;
-  border: none !important;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .popup {
@@ -390,22 +393,19 @@ function formatDistance(meters: number): string {
   font-weight: 600;
 }
 
-.legend-item--icons {
-  display: flex;
-  gap: 0.5rem;
-  font-size: 0.7rem;
-  color: #6b7280;
-  cursor: default;
-  padding-top: 0.2rem;
-  border-top: 1px solid #e5e7eb;
-  margin-top: 0.1rem;
-}
-
 .legend-swatch {
   width: 18px;
   height: 4px;
   border-radius: 2px;
   flex-shrink: 0;
+}
+
+.legend-swatch--plow {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #fbbf24;
+  border: 2px solid #d97706;
 }
 
 .legend-label {
