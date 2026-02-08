@@ -15,7 +15,6 @@ from udot import (
     fetch_all_snow_plows,
     fetch_route_plows,
     is_wolf_creek_closed,
-    ROUTE_PASS_KEYWORDS,
     BASE_URL,
 )
 
@@ -174,31 +173,39 @@ class TestFetchRouteWeather:
 
 class TestFetchRoutePasses:
     @responses.activate
-    def test_filters_by_keywords(self):
+    def test_filters_by_id(self):
         responses.add(
             responses.GET,
             f"{BASE_URL}/mountainpasses",
             json=[
                 {
                     "Id": 44,
-                    "Name": "Wolf Creek Pass",
+                    "Name": "SR-35 Wolf Creek Pass",
                     "Roadway": "SR-35",
-                    "MaxElevation": "9485",
-                    "Latitude": 40.37,
-                    "Longitude": -111.12,
+                    "MaxElevation": "9488",
+                    "Latitude": 40.48,
+                    "Longitude": -111.03,
+                    "StationName": "SR-35 @ Wolf Creek",
                     "AirTemperature": "25",
                     "WindSpeed": "15",
+                    "WindGust": "30",
+                    "WindDirection": "NW",
+                    "SurfaceTemp": "22",
                     "SurfaceStatus": "Snow/Ice",
+                    "Visibility": "0.5",
+                    "Forecasts": "Evening;Snow expected",
                     "SeasonalInfo": [
                         {
                             "SeasonalClosureStatus": "OPEN",
-                            "SeasonalClosureDescription": "",
+                            "SeasonalClosureDescription": "Francis to Hanna",
                         }
                     ],
+                    "SeasonalRouteName": "Route 35",
+                    "SeasonalClosureTitle": "SR 35 Wolf Creek Pass",
                 },
                 {
-                    "Id": 10,
-                    "Name": "Parley's Summit",
+                    "Id": 9,
+                    "Name": "I-80 Parleys Summit",
                     "Roadway": "I-80",
                     "AirTemperature": "32",
                     "SeasonalInfo": [],
@@ -212,35 +219,56 @@ class TestFetchRoutePasses:
             ],
             status=200,
         )
-        passes = fetch_route_passes(FAKE_KEY)
+        passes = fetch_route_passes(FAKE_KEY, [44, 9])
         names = [p.name for p in passes]
-        assert "Wolf Creek Pass" in names
-        assert "Parley's Summit" in names
+        assert "SR-35 Wolf Creek Pass" in names
+        assert "I-80 Parleys Summit" in names
         assert "Cedar Breaks Summit" not in names
 
     @responses.activate
-    def test_parses_closure_status(self):
+    def test_parses_all_fields(self):
         responses.add(
             responses.GET,
             f"{BASE_URL}/mountainpasses",
             json=[
                 {
                     "Id": 44,
-                    "Name": "Wolf Creek Pass",
+                    "Name": "SR-35 Wolf Creek Pass",
+                    "Roadway": "SR-35",
+                    "MaxElevation": "9488",
+                    "Latitude": 40.48,
+                    "Longitude": -111.03,
+                    "StationName": "SR-35 @ Wolf Creek",
+                    "AirTemperature": "28",
+                    "WindSpeed": "5",
+                    "WindGust": "7",
+                    "WindDirection": "NE",
+                    "SurfaceTemp": "",
+                    "SurfaceStatus": "",
+                    "Visibility": "",
+                    "Forecasts": "",
                     "SeasonalInfo": [
                         {
                             "SeasonalClosureStatus": "CLOSED",
                             "SeasonalClosureDescription": "Seasonal closure",
                         }
                     ],
+                    "SeasonalRouteName": "Route 35",
+                    "SeasonalClosureTitle": "SR 35 Wolf Creek Pass",
                 },
             ],
             status=200,
         )
-        passes = fetch_route_passes(FAKE_KEY)
+        passes = fetch_route_passes(FAKE_KEY, [44])
         assert len(passes) == 1
-        assert passes[0].closure_status == "CLOSED"
-        assert passes[0].closure_description == "Seasonal closure"
+        p = passes[0]
+        assert p.closure_status == "CLOSED"
+        assert p.closure_description == "Seasonal closure"
+        assert p.station_name == "SR-35 @ Wolf Creek"
+        assert p.seasonal_route_name == "Route 35"
+        assert p.seasonal_closure_title == "SR 35 Wolf Creek Pass"
+        assert p.wind_speed == "5"
+        assert p.wind_gust == "7"
 
 
 class TestIsWolfCreekClosed:

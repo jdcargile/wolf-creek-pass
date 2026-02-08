@@ -213,34 +213,23 @@ def fetch_route_weather(
 # ---- Mountain Passes ----
 
 
-# Passes along JD's routes (by keyword in the UDOT pass name)
-ROUTE_PASS_KEYWORDS = {
-    "wolf creek",
-    "parley",
-    "daniels",
-    "provo canyon",
-    "mayflower",
-    "sr-248",
-    "pinion",
-}
-
-
 def _parse_mountain_pass(item: dict) -> MountainPass:
     """Parse a single UDOT mountain pass dict into a MountainPass model."""
     seasonal_info = item.get("SeasonalInfo") or []
     closure_status = ""
     closure_desc = ""
     if seasonal_info:
-        closure_status = seasonal_info[0].get("SeasonalClosureStatus", "")
-        closure_desc = seasonal_info[0].get("SeasonalClosureDescription", "")
+        closure_status = seasonal_info[0].get("SeasonalClosureStatus") or ""
+        closure_desc = seasonal_info[0].get("SeasonalClosureDescription") or ""
 
     return MountainPass(
         id=item.get("Id", 0),
-        name=item.get("Name", ""),
-        roadway=item.get("Roadway", ""),
-        elevation_ft=item.get("MaxElevation", ""),
+        name=item.get("Name") or "",
+        roadway=item.get("Roadway") or "",
+        elevation_ft=item.get("MaxElevation") or "",
         latitude=item.get("Latitude"),
         longitude=item.get("Longitude"),
+        station_name=item.get("StationName") or "",
         air_temperature=item.get("AirTemperature") or "",
         wind_speed=item.get("WindSpeed") or "",
         wind_gust=item.get("WindGust") or "",
@@ -251,6 +240,8 @@ def _parse_mountain_pass(item: dict) -> MountainPass:
         forecasts=item.get("Forecasts") or "",
         closure_status=closure_status,
         closure_description=closure_desc,
+        seasonal_route_name=item.get("SeasonalRouteName") or "",
+        seasonal_closure_title=item.get("SeasonalClosureTitle") or "",
     )
 
 
@@ -260,12 +251,11 @@ def fetch_all_mountain_passes(api_key: str) -> list[MountainPass]:
     return [_parse_mountain_pass(item) for item in raw]
 
 
-def fetch_route_passes(api_key: str) -> list[MountainPass]:
-    """Fetch mountain passes along JD's routes."""
+def fetch_route_passes(api_key: str, pass_ids: list[int]) -> list[MountainPass]:
+    """Fetch mountain passes by their UDOT IDs."""
     all_passes = fetch_all_mountain_passes(api_key)
-    return [
-        p for p in all_passes if any(kw in p.name.lower() for kw in ROUTE_PASS_KEYWORDS)
-    ]
+    id_set = set(pass_ids)
+    return [p for p in all_passes if p.id in id_set]
 
 
 def is_wolf_creek_closed(api_key: str) -> bool:

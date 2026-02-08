@@ -84,6 +84,7 @@ export interface MountainPass {
   elevation_ft: string
   latitude: number | null
   longitude: number | null
+  station_name: string
   air_temperature: string
   wind_speed: string
   wind_gust: string
@@ -94,6 +95,8 @@ export interface MountainPass {
   forecasts: string
   closure_status: string
   closure_description: string
+  seasonal_route_name: string
+  seasonal_closure_title: string
 }
 
 export interface SnowPlow {

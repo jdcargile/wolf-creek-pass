@@ -19,12 +19,13 @@ from pydantic_settings import BaseSettings
 
 @dataclass
 class RouteConfig:
-    """Static definition of a named route with waypoints and camera IDs."""
+    """Static definition of a named route with waypoints, cameras, and passes."""
 
     route_id: str
     name: str
     waypoints: list[str] = field(default_factory=list)
     camera_ids: list[int] = field(default_factory=list)
+    pass_ids: list[int] = field(default_factory=list)
     color: str = "#3b82f6"  # Hex color for map polyline
 
 
@@ -46,14 +47,15 @@ ROUTES: list[RouteConfig] = [
         ],
         color="#3b82f6",  # blue
         camera_ids=[
-            # I-80 Parley's Canyon (SLC → Park City) -- key corridor cameras
-            91604,  # I-80 EB @ Mouth of Parley's Canyon
-            91746,  # I-80 EB @ MP 132.97
-            90912,  # I-80 EB @ Parley's Summit
-            91736,  # I-80 EB @ West of US-40 junction
-            # SR-35 Wolf Creek Pass -- the money cameras
+            90602,  # SR-248 RWIS EB @ MP 8.95 (Kamas corridor)
+            90912,  # I-80 EB @ Parley's Summit / MP 139.24
             90544,  # SR-35 RWIS @ Wolf Creek / MP 9.92
             90779,  # SR-35 RWIS EB @ Wolf Creek Pass / MP 19.33
+        ],
+        pass_ids=[
+            9,  # I-80 Parley's Summit (7016')
+            75,  # SR-248 Summit (7000')
+            44,  # SR-35 Wolf Creek Pass (9488')
         ],
     ),
 ]
@@ -68,6 +70,18 @@ def get_all_camera_ids() -> list[int]:
             if cid not in seen:
                 seen.add(cid)
                 result.append(cid)
+    return result
+
+
+def get_all_pass_ids() -> list[int]:
+    """Union of all pass IDs across all routes, deduplicated, order preserved."""
+    seen: set[int] = set()
+    result: list[int] = []
+    for route_cfg in ROUTES:
+        for pid in route_cfg.pass_ids:
+            if pid not in seen:
+                seen.add(pid)
+                result.append(pid)
     return result
 
 

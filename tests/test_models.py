@@ -116,10 +116,12 @@ class TestMountainPass:
 
     def test_full(self, sample_mountain_pass):
         assert sample_mountain_pass.id == 44
-        assert sample_mountain_pass.name == "Wolf Creek Pass"
-        assert sample_mountain_pass.elevation_ft == "9485"
+        assert sample_mountain_pass.name == "SR-35 Wolf Creek Pass"
+        assert sample_mountain_pass.elevation_ft == "9488"
         assert sample_mountain_pass.air_temperature == "25"
         assert sample_mountain_pass.closure_status == "OPEN"
+        assert sample_mountain_pass.station_name == "SR-35 @ Wolf Creek"
+        assert sample_mountain_pass.seasonal_route_name == "Route 35"
 
     def test_serialization_roundtrip(self, sample_mountain_pass):
         data = sample_mountain_pass.model_dump()

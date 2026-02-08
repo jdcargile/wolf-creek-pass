@@ -74,9 +74,12 @@ onMounted(async () => {
                 {{ p.closure_status }}
               </span>
             </div>
-            <div class="pass-elev">{{ p.elevation_ft }}'</div>
+            <div class="pass-elev">{{ p.roadway }} &middot; {{ p.elevation_ft }}'</div>
             <div class="pass-temp" v-if="p.air_temperature">
               {{ p.air_temperature }}&deg;F
+              <span v-if="p.surface_temp" class="pass-surface-temp">
+                (surface {{ p.surface_temp }}&deg;F)
+              </span>
             </div>
             <div class="pass-detail" v-if="p.surface_status">
               Surface: {{ p.surface_status }}
@@ -86,7 +89,20 @@ onMounted(async () => {
               <span v-if="p.wind_gust">(gusts {{ p.wind_gust }})</span>
             </div>
             <div class="pass-detail" v-if="p.visibility">
-              Visibility: {{ p.visibility }}
+              Visibility: {{ p.visibility }} mi
+            </div>
+            <div v-if="p.forecasts" class="pass-forecasts">
+              <div
+                v-for="(fc, fi) in p.forecasts.split('|').map(s => s.split(';'))"
+                :key="fi"
+                class="pass-forecast"
+              >
+                <span class="forecast-period">{{ fc[0] }}</span>
+                <span class="forecast-text">{{ fc[1] }}</span>
+              </div>
+            </div>
+            <div v-if="p.closure_description" class="pass-detail pass-closure-desc">
+              {{ p.closure_description }}
             </div>
           </div>
         </div>
@@ -321,9 +337,42 @@ code {
   font-weight: 700;
 }
 
+.pass-surface-temp {
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
 .pass-detail {
   font-size: 0.75rem;
   color: var(--color-text-muted);
+}
+
+.pass-closure-desc {
+  font-style: italic;
+  margin-top: 0.25rem;
+}
+
+.pass-forecasts {
+  margin-top: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.pass-forecast {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  line-height: 1.3;
+}
+
+.forecast-period {
+  font-weight: 600;
+  margin-right: 0.3rem;
+}
+
+.forecast-text {
+  font-weight: 400;
 }
 
 /* Camera grid */

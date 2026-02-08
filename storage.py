@@ -235,6 +235,7 @@ class SQLiteStorage:
                 elevation_ft TEXT,
                 latitude REAL,
                 longitude REAL,
+                station_name TEXT,
                 air_temperature TEXT,
                 wind_speed TEXT,
                 wind_gust TEXT,
@@ -244,7 +245,9 @@ class SQLiteStorage:
                 visibility TEXT,
                 forecasts TEXT,
                 closure_status TEXT,
-                closure_description TEXT
+                closure_description TEXT,
+                seasonal_route_name TEXT,
+                seasonal_closure_title TEXT
             )
         """)
 
@@ -598,10 +601,11 @@ class SQLiteStorage:
             conn.execute(
                 """INSERT INTO mountain_passes
                 (cycle_id, pass_id, name, roadway, elevation_ft, latitude, longitude,
-                 air_temperature, wind_speed, wind_gust, wind_direction,
+                 station_name, air_temperature, wind_speed, wind_gust, wind_direction,
                  surface_temp, surface_status, visibility, forecasts,
-                 closure_status, closure_description)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                 closure_status, closure_description,
+                 seasonal_route_name, seasonal_closure_title)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     cycle_id,
                     p.id,
@@ -610,6 +614,7 @@ class SQLiteStorage:
                     p.elevation_ft,
                     p.latitude,
                     p.longitude,
+                    p.station_name,
                     p.air_temperature,
                     p.wind_speed,
                     p.wind_gust,
@@ -620,6 +625,8 @@ class SQLiteStorage:
                     p.forecasts,
                     p.closure_status,
                     p.closure_description,
+                    p.seasonal_route_name,
+                    p.seasonal_closure_title,
                 ),
             )
         conn.commit()
@@ -639,6 +646,7 @@ class SQLiteStorage:
                 elevation_ft=r["elevation_ft"] or "",
                 latitude=r["latitude"],
                 longitude=r["longitude"],
+                station_name=r["station_name"] or "",
                 air_temperature=r["air_temperature"] or "",
                 wind_speed=r["wind_speed"] or "",
                 wind_gust=r["wind_gust"] or "",
@@ -649,6 +657,8 @@ class SQLiteStorage:
                 forecasts=r["forecasts"] or "",
                 closure_status=r["closure_status"] or "",
                 closure_description=r["closure_description"] or "",
+                seasonal_route_name=r["seasonal_route_name"] or "",
+                seasonal_closure_title=r["seasonal_closure_title"] or "",
             )
             for r in rows
         ]
@@ -1156,6 +1166,7 @@ class DynamoStorage:
                         "elevation_ft": p.elevation_ft,
                         "latitude": _decimal_safe(p.latitude),
                         "longitude": _decimal_safe(p.longitude),
+                        "station_name": p.station_name,
                         "air_temperature": p.air_temperature,
                         "wind_speed": p.wind_speed,
                         "wind_gust": p.wind_gust,
@@ -1166,6 +1177,8 @@ class DynamoStorage:
                         "forecasts": p.forecasts,
                         "closure_status": p.closure_status,
                         "closure_description": p.closure_description,
+                        "seasonal_route_name": p.seasonal_route_name,
+                        "seasonal_closure_title": p.seasonal_closure_title,
                     }
                 )
             )
@@ -1187,6 +1200,7 @@ class DynamoStorage:
                 elevation_ft=item.get("elevation_ft", ""),
                 latitude=_float_safe(item.get("latitude")),
                 longitude=_float_safe(item.get("longitude")),
+                station_name=item.get("station_name", ""),
                 air_temperature=item.get("air_temperature", ""),
                 wind_speed=item.get("wind_speed", ""),
                 wind_gust=item.get("wind_gust", ""),
@@ -1197,6 +1211,8 @@ class DynamoStorage:
                 forecasts=item.get("forecasts", ""),
                 closure_status=item.get("closure_status", ""),
                 closure_description=item.get("closure_description", ""),
+                seasonal_route_name=item.get("seasonal_route_name", ""),
+                seasonal_closure_title=item.get("seasonal_closure_title", ""),
             )
             for item in resp.get("Items", [])
         ]

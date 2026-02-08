@@ -178,9 +178,9 @@ class TestSQLiteStoragePasses:
         sqlite_storage.save_mountain_passes("cycle-1", sample_mountain_passes)
         passes = sqlite_storage.get_mountain_passes("cycle-1")
         assert len(passes) == 2
-        assert passes[0].name == "Wolf Creek Pass"
+        assert passes[0].name == "SR-35 Wolf Creek Pass"
         assert passes[0].air_temperature == "25"
-        assert passes[1].name == "Parley's Summit"
+        assert passes[1].name == "I-80 Parleys Summit"
 
     def test_empty_cycle(self, sqlite_storage):
         assert sqlite_storage.get_mountain_passes("nonexistent") == []
@@ -192,12 +192,17 @@ class TestSQLiteStoragePasses:
         p = passes[0]
         assert p.id == 44
         assert p.roadway == "SR-35"
-        assert p.elevation_ft == "9485"
+        assert p.elevation_ft == "9488"
+        assert p.station_name == "SR-35 @ Wolf Creek"
         assert p.wind_speed == "15"
         assert p.wind_gust == "30"
         assert p.surface_status == "Snow/Ice"
-        assert p.visibility == "0.5 mi"
+        assert p.visibility == "0.5"
         assert p.closure_status == "OPEN"
+        assert p.closure_description == "Francis to Hanna"
+        assert p.seasonal_route_name == "Route 35"
+        assert p.seasonal_closure_title == "SR 35 Wolf Creek Pass"
+        assert "Evening" in p.forecasts
 
 
 class TestSQLiteStoragePlows:

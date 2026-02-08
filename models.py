@@ -144,7 +144,8 @@ class MountainPass(BaseModel):
     elevation_ft: str = ""
     latitude: float | None = None
     longitude: float | None = None
-    # Weather data (from the pass's station)
+    # Weather station data
+    station_name: str = ""
     air_temperature: str = ""
     wind_speed: str = ""
     wind_gust: str = ""
@@ -152,11 +153,13 @@ class MountainPass(BaseModel):
     surface_temp: str = ""
     surface_status: str = ""
     visibility: str = ""
-    # Forecasts (pipe-delimited from UDOT)
+    # Forecasts (pipe-delimited periods from UDOT, e.g. "Evening;...|Morning;...")
     forecasts: str = ""
     # Seasonal closure info
     closure_status: str = ""  # "OPEN", "CLOSED", or ""
     closure_description: str = ""
+    seasonal_route_name: str = ""
+    seasonal_closure_title: str = ""
 
 
 # ---- Snow Plows ----
