@@ -30,6 +30,9 @@ export interface CaptureRecord {
 }
 
 export interface Route {
+  route_id: string
+  name: string
+  color: string
   origin: string
   destination: string
   polyline: string
@@ -76,7 +79,7 @@ export interface WeatherStation {
 
 export interface CycleData {
   cycle: CycleSummary
-  route: Route | null
+  routes: Route[]
   captures: CaptureRecord[]
   conditions: RoadCondition[]
   events: Event[]

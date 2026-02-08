@@ -54,8 +54,8 @@ class Storage(Protocol):
     def get_captures_by_cycle(self, cycle_id: str) -> list[CaptureRecord]: ...
 
     # Routes
-    def save_route(self, route: Route) -> None: ...
-    def get_route(self) -> Route | None: ...
+    def save_routes(self, routes: list[Route]) -> None: ...
+    def get_routes(self) -> list[Route]: ...
 
     # Capture cycles
     def save_cycle(self, cycle: CycleSummary) -> None: ...
@@ -140,7 +140,9 @@ class SQLiteStorage:
 
         c.execute("""
             CREATE TABLE IF NOT EXISTS routes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                route_id TEXT PRIMARY KEY,
+                name TEXT,
+                color TEXT,
                 origin TEXT,
                 destination TEXT,
                 polyline TEXT,
@@ -309,38 +311,48 @@ class SQLiteStorage:
 
     # -- Routes --
 
-    def save_route(self, route: Route) -> None:
+    def save_routes(self, routes: list[Route]) -> None:
         conn = self._conn()
-        conn.execute("DELETE FROM routes")  # Only keep latest route
-        conn.execute(
-            """INSERT INTO routes (origin, destination, polyline, distance_m, duration_s, duration_in_traffic_s)
-            VALUES (?, ?, ?, ?, ?, ?)""",
-            (
-                route.origin,
-                route.destination,
-                route.polyline,
-                route.distance_m,
-                route.duration_s,
-                route.duration_in_traffic_s,
-            ),
-        )
+        conn.execute("DELETE FROM routes")
+        for route in routes:
+            conn.execute(
+                """INSERT OR REPLACE INTO routes
+                (route_id, name, color, origin, destination, polyline,
+                 distance_m, duration_s, duration_in_traffic_s)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    route.route_id,
+                    route.name,
+                    route.color,
+                    route.origin,
+                    route.destination,
+                    route.polyline,
+                    route.distance_m,
+                    route.duration_s,
+                    route.duration_in_traffic_s,
+                ),
+            )
         conn.commit()
         conn.close()
 
-    def get_route(self) -> Route | None:
+    def get_routes(self) -> list[Route]:
         conn = self._conn()
-        row = conn.execute("SELECT * FROM routes ORDER BY id DESC LIMIT 1").fetchone()
+        rows = conn.execute("SELECT * FROM routes ORDER BY route_id").fetchall()
         conn.close()
-        if not row:
-            return None
-        return Route(
-            origin=row["origin"],
-            destination=row["destination"],
-            polyline=row["polyline"],
-            distance_m=row["distance_m"],
-            duration_s=row["duration_s"],
-            duration_in_traffic_s=row["duration_in_traffic_s"],
-        )
+        return [
+            Route(
+                route_id=r["route_id"],
+                name=r["name"] or "",
+                color=r["color"] or "#3b82f6",
+                origin=r["origin"] or "",
+                destination=r["destination"] or "",
+                polyline=r["polyline"] or "",
+                distance_m=r["distance_m"] or 0,
+                duration_s=r["duration_s"] or 0,
+                duration_in_traffic_s=r["duration_in_traffic_s"],
+            )
+            for r in rows
+        ]
 
     # -- Cycles --
 
@@ -738,35 +750,48 @@ class DynamoStorage:
 
     # -- Routes --
 
-    def save_route(self, route: Route) -> None:
-        self.table.put_item(
-            Item=_strip_none(
-                {
-                    "PK": "ROUTE#riverton-hanna",
-                    "SK": "META",
-                    "origin": route.origin,
-                    "destination": route.destination,
-                    "polyline": route.polyline,
-                    "distance_m": route.distance_m,
-                    "duration_s": route.duration_s,
-                    "duration_in_traffic_s": route.duration_in_traffic_s,
-                }
+    def save_routes(self, routes: list[Route]) -> None:
+        for route in routes:
+            self.table.put_item(
+                Item=_strip_none(
+                    {
+                        "PK": f"ROUTE#{route.route_id}",
+                        "SK": "META",
+                        "GSI1PK": "ROUTE",
+                        "GSI1SK": route.route_id,
+                        "route_id": route.route_id,
+                        "name": route.name,
+                        "color": route.color,
+                        "origin": route.origin,
+                        "destination": route.destination,
+                        "polyline": route.polyline,
+                        "distance_m": route.distance_m,
+                        "duration_s": route.duration_s,
+                        "duration_in_traffic_s": route.duration_in_traffic_s,
+                    }
+                )
             )
-        )
 
-    def get_route(self) -> Route | None:
-        resp = self.table.get_item(Key={"PK": "ROUTE#riverton-hanna", "SK": "META"})
-        item = resp.get("Item")
-        if not item:
-            return None
-        return Route(
-            origin=item.get("origin", ""),
-            destination=item.get("destination", ""),
-            polyline=item.get("polyline", ""),
-            distance_m=int(item.get("distance_m", 0)),
-            duration_s=int(item.get("duration_s", 0)),
-            duration_in_traffic_s=_int_safe(item.get("duration_in_traffic_s")),
+    def get_routes(self) -> list[Route]:
+        resp = self.table.query(
+            IndexName="GSI1",
+            KeyConditionExpression="GSI1PK = :pk",
+            ExpressionAttributeValues={":pk": "ROUTE"},
         )
+        return [
+            Route(
+                route_id=item.get("route_id", ""),
+                name=item.get("name", ""),
+                color=item.get("color", "#3b82f6"),
+                origin=item.get("origin", ""),
+                destination=item.get("destination", ""),
+                polyline=item.get("polyline", ""),
+                distance_m=int(item.get("distance_m", 0)),
+                duration_s=int(item.get("duration_s", 0)),
+                duration_in_traffic_s=_int_safe(item.get("duration_in_traffic_s")),
+            )
+            for item in resp.get("Items", [])
+        ]
 
     # -- Cycles --
 
@@ -774,10 +799,10 @@ class DynamoStorage:
         self.table.put_item(
             Item=_strip_none(
                 {
-                    "PK": "ROUTE#riverton-hanna",
+                    "PK": "CYCLES",
                     "SK": f"CYCLE#{cycle.cycle_id}",
                     "GSI1PK": f"CYCLE#{cycle.cycle_id}",
-                    "GSI1SK": "ROUTE",
+                    "GSI1SK": "META",
                     "cycle_id": cycle.cycle_id,
                     "started_at": cycle.started_at,
                     "completed_at": cycle.completed_at,
@@ -794,7 +819,7 @@ class DynamoStorage:
         resp = self.table.query(
             KeyConditionExpression="PK = :pk AND begins_with(SK, :sk_prefix)",
             ExpressionAttributeValues={
-                ":pk": "ROUTE#riverton-hanna",
+                ":pk": "CYCLES",
                 ":sk_prefix": "CYCLE#",
             },
             ScanIndexForward=False,

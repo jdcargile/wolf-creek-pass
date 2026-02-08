@@ -2,7 +2,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { CycleData, CycleSummary } from '@/types'
+import type { CycleData, CycleSummary, Route } from '@/types'
 import { fetchCycleIndex, fetchCycleData, fetchLatestCycle } from '@/composables/useApi'
 
 export const useCycleStore = defineStore('cycle', () => {
@@ -14,6 +14,8 @@ export const useCycleStore = defineStore('cycle', () => {
 
   // Getters
   const hasData = computed(() => currentCycle.value !== null)
+  const routes = computed<Route[]>(() => currentCycle.value?.routes ?? [])
+  const primaryRoute = computed<Route | null>(() => routes.value[0] ?? null)
   const snowCount = computed(() => currentCycle.value?.cycle.snow_count ?? 0)
   const cameraCount = computed(() => currentCycle.value?.cycle.cameras_processed ?? 0)
   const travelTimeMin = computed(() => {
@@ -65,6 +67,8 @@ export const useCycleStore = defineStore('cycle', () => {
     loading,
     error,
     hasData,
+    routes,
+    primaryRoute,
     snowCount,
     cameraCount,
     travelTimeMin,

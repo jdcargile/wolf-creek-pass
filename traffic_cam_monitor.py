@@ -3,8 +3,8 @@
 Wolf Creek Pass -- Route-Aware Traffic Camera Monitor
 
 Orchestrates the full capture cycle:
-1. Get route (Google Directions API)
-2. Fetch cameras along route (UDOT API + haversine filtering)
+1. Get routes (Google Directions API -- 3 named routes)
+2. Fetch cameras along routes (UDOT API, hardcoded by route)
 3. Download + analyze camera images (Claude Vision)
 4. Fetch road conditions, events, weather (UDOT API)
 5. Store everything (DynamoDB or SQLite)
@@ -25,8 +25,8 @@ from rich.panel import Panel
 from analyze import analyze_image_bytes
 from export import export_cycle_index, export_cycle_to_file
 from models import CaptureRecord, CycleSummary
-from route import get_route
-from settings import ROUTE_CAMERA_IDS, Settings
+from route import get_routes
+from settings import Settings, get_all_camera_ids
 from storage import create_storage
 from udot import (
     fetch_all_cameras,
@@ -48,27 +48,30 @@ def run_capture_cycle(settings: Settings) -> None:
 
     console.rule(f"[bold blue]Capture cycle {cycle_id}[/bold blue]")
 
-    # 1. Get route
-    route = None
+    # 1. Get all 3 routes
+    routes = []
     if settings.google_maps_api_key:
         try:
-            route = get_route(settings)
-            storage.save_route(route)
+            routes = get_routes(settings)
+            storage.save_routes(routes)
         except Exception as e:
             console.print(
                 f"[yellow]Route fetch failed (continuing without):[/yellow] {e}"
             )
-            route = storage.get_route()  # Fall back to cached route
+            routes = storage.get_routes()  # Fall back to cached routes
     else:
-        console.print("[yellow]No Google Maps API key -- skipping route[/yellow]")
-        route = storage.get_route()
+        console.print("[yellow]No Google Maps API key -- skipping routes[/yellow]")
+        routes = storage.get_routes()
 
-    # 2. Fetch cameras (hardcoded route IDs -- no need to fetch all 2000+)
+    primary_route = routes[0] if routes else None
+
+    # 2. Fetch cameras (union of all route camera IDs)
+    all_camera_ids = get_all_camera_ids()
     all_cameras = fetch_all_cameras(settings.udot_api_key)
     camera_lookup = {c.Id: c for c in all_cameras}
-    cameras = [camera_lookup[cid] for cid in ROUTE_CAMERA_IDS if cid in camera_lookup]
+    cameras = [camera_lookup[cid] for cid in all_camera_ids if cid in camera_lookup]
     console.print(
-        f"Matched [bold]{len(cameras)}[/bold] of {len(ROUTE_CAMERA_IDS)} "
+        f"Matched [bold]{len(cameras)}[/bold] of {len(all_camera_ids)} "
         f"hardcoded route cameras"
     )
 
@@ -162,42 +165,45 @@ def run_capture_cycle(settings: Settings) -> None:
             console.print(f"  [dim]{analysis.notes}[/dim]")
 
     # 4. Fetch UDOT enrichment data (non-fatal -- don't let this block export)
+    # Use the primary route for enrichment queries
     conditions, events, weather = [], [], []
-    if route:
+    if primary_route and primary_route.polyline:
         try:
-            conditions = fetch_route_conditions(settings.udot_api_key, route)
+            conditions = fetch_route_conditions(settings.udot_api_key, primary_route)
             storage.save_road_conditions(cycle_id, conditions)
             console.print(f"Saved [bold]{len(conditions)}[/bold] road conditions")
         except Exception as e:
             console.print(f"[yellow]Road conditions failed (continuing):[/yellow] {e}")
 
         try:
-            events = fetch_route_events(settings.udot_api_key, route)
+            events = fetch_route_events(settings.udot_api_key, primary_route)
             storage.save_events(cycle_id, events)
             console.print(f"Saved [bold]{len(events)}[/bold] events")
         except Exception as e:
             console.print(f"[yellow]Events failed (continuing):[/yellow] {e}")
 
         try:
-            weather = fetch_route_weather(settings.udot_api_key, route)
+            weather = fetch_route_weather(settings.udot_api_key, primary_route)
             storage.save_weather(cycle_id, weather)
             console.print(f"Saved [bold]{len(weather)}[/bold] weather stations")
         except Exception as e:
             console.print(f"[yellow]Weather failed (continuing):[/yellow] {e}")
 
-    # 5. Save cycle summary
+    # 5. Save cycle summary (use primary route for travel time/distance)
     cycle.completed_at = datetime.now().isoformat()
     cycle.cameras_processed = len(cameras)
     cycle.snow_count = snow_count
     cycle.event_count = len(events)
     cycle.travel_time_s = (
-        route.duration_in_traffic_s or route.duration_s if route else None
+        primary_route.duration_in_traffic_s or primary_route.duration_s
+        if primary_route
+        else None
     )
-    cycle.distance_m = route.distance_m if route else None
+    cycle.distance_m = primary_route.distance_m if primary_route else None
     storage.save_cycle(cycle)
 
     # 6. Export JSON for Vue
-    export_cycle_to_file(storage, cycle, route, settings)
+    export_cycle_to_file(storage, cycle, routes, settings)
     export_cycle_index(storage, settings)
 
     analyzed = len(cameras) - skipped_count

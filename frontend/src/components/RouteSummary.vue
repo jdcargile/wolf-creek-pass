@@ -6,6 +6,10 @@ const store = useCycleStore()
 
 <template>
   <div class="route-summary" v-if="store.hasData">
+    <div class="stat" v-if="store.primaryRoute">
+      <span class="stat-value">{{ store.primaryRoute.name }}</span>
+      <span class="stat-label">primary route</span>
+    </div>
     <div class="stat">
       <span class="stat-value">{{ store.distanceMiles }}</span>
       <span class="stat-label">miles</span>

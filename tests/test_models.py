@@ -58,11 +58,16 @@ class TestCaptureRecord:
 class TestRoute:
     def test_defaults(self):
         r = Route(origin="A", destination="B")
+        assert r.route_id == ""
+        assert r.name == ""
+        assert r.color == "#3b82f6"
         assert r.polyline == ""
         assert r.distance_m == 0
         assert r.duration_in_traffic_s is None
 
     def test_full(self, sample_route):
+        assert sample_route.route_id == "parleys-wolfcreek"
+        assert sample_route.name == "Parley's / Wolf Creek"
         assert sample_route.distance_m == 145000
         assert sample_route.polyline != ""
 

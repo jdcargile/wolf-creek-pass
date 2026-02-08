@@ -27,28 +27,30 @@ class TestExportCycleJson:
         """Verify the JSON payload has all expected top-level keys."""
         sqlite_storage.save_cycle(sample_cycle)
         sqlite_storage.save_capture(sample_capture)
-        sqlite_storage.save_route(sample_route)
+        sqlite_storage.save_routes([sample_route])
         sqlite_storage.save_road_conditions(sample_cycle.cycle_id, sample_conditions)
         sqlite_storage.save_events(sample_cycle.cycle_id, sample_events)
         sqlite_storage.save_weather(sample_cycle.cycle_id, sample_weather)
 
-        data = export_cycle_json(sqlite_storage, sample_cycle, sample_route)
+        data = export_cycle_json(sqlite_storage, sample_cycle, [sample_route])
 
         assert "cycle" in data
-        assert "route" in data
+        assert "routes" in data
         assert "captures" in data
         assert "conditions" in data
         assert "events" in data
         assert "weather" in data
         assert data["cycle"]["cycle_id"] == sample_cycle.cycle_id
+        assert len(data["routes"]) == 1
+        assert data["routes"][0]["route_id"] == "parleys-wolfcreek"
         assert len(data["captures"]) == 1
         assert len(data["conditions"]) == 2
         assert len(data["events"]) == 2
         assert len(data["weather"]) == 2
 
-    def test_no_route(self, sqlite_storage, sample_cycle):
-        data = export_cycle_json(sqlite_storage, sample_cycle, route=None)
-        assert data["route"] is None
+    def test_no_routes(self, sqlite_storage, sample_cycle):
+        data = export_cycle_json(sqlite_storage, sample_cycle, routes=None)
+        assert data["routes"] == []
 
 
 class TestExportCycleToFile:

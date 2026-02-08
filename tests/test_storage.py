@@ -73,16 +73,35 @@ class TestSQLiteStorageCaptures:
 
 
 class TestSQLiteStorageRoutes:
-    def test_save_and_get_route(self, sqlite_storage, sample_route):
-        sqlite_storage.save_route(sample_route)
-        route = sqlite_storage.get_route()
-        assert route is not None
-        assert route.origin == "Riverton, UT"
-        assert route.distance_m == 145000
-        assert route.polyline != ""
+    def test_save_and_get_routes(self, sqlite_storage, sample_route):
+        sqlite_storage.save_routes([sample_route])
+        routes = sqlite_storage.get_routes()
+        assert len(routes) == 1
+        assert routes[0].route_id == "parleys-wolfcreek"
+        assert routes[0].name == "Parley's / Wolf Creek"
+        assert routes[0].origin == "Riverton, UT"
+        assert routes[0].distance_m == 145000
+        assert routes[0].polyline != ""
 
-    def test_get_route_empty(self, sqlite_storage):
-        assert sqlite_storage.get_route() is None
+    def test_save_multiple_routes(self, sqlite_storage, sample_route):
+        route2 = Route(
+            route_id="provo-wolfcreek",
+            name="Provo Canyon / Wolf Creek",
+            color="#8b5cf6",
+            origin="Riverton, UT",
+            destination="Hanna, UT",
+            distance_m=160000,
+            duration_s=8000,
+        )
+        sqlite_storage.save_routes([sample_route, route2])
+        routes = sqlite_storage.get_routes()
+        assert len(routes) == 2
+        route_ids = {r.route_id for r in routes}
+        assert "parleys-wolfcreek" in route_ids
+        assert "provo-wolfcreek" in route_ids
+
+    def test_get_routes_empty(self, sqlite_storage):
+        assert sqlite_storage.get_routes() == []
 
 
 class TestSQLiteStorageCycles:

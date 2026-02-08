@@ -68,10 +68,13 @@ class CaptureRecord(BaseModel):
 
 
 class Route(BaseModel):
-    """A route with encoded polyline and travel info."""
+    """A named route with encoded polyline and travel info."""
 
-    origin: str
-    destination: str
+    route_id: str = ""  # e.g. "parleys-wolfcreek"
+    name: str = ""  # e.g. "Parley's / Wolf Creek"
+    color: str = "#3b82f6"  # Hex color for map polyline
+    origin: str = ""
+    destination: str = ""
     polyline: str = ""  # Google encoded polyline
     distance_m: int = 0
     duration_s: int = 0

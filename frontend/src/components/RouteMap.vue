@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed } from 'vue'
 import { LMap, LTileLayer, LPolyline, LMarker, LPopup, LCircleMarker } from '@vue-leaflet/vue-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useCycleStore } from '@/stores/cycle'
-import type { CaptureRecord, Event as TrafficEvent } from '@/types'
+import type { CaptureRecord, Event as TrafficEvent, Route } from '@/types'
 
 const store = useCycleStore()
 
@@ -44,17 +44,24 @@ function decodePolyline(encoded: string): [number, number][] {
   return points
 }
 
-// Route polyline
-const routePoints = computed(() => {
-  if (!store.currentCycle?.route?.polyline) return []
-  return decodePolyline(store.currentCycle.route.polyline)
+// Decoded polylines for all routes
+interface DecodedRoute {
+  route: Route
+  points: [number, number][]
+}
+
+const decodedRoutes = computed<DecodedRoute[]>(() => {
+  return store.routes
+    .filter((r) => r.polyline)
+    .map((r) => ({ route: r, points: decodePolyline(r.polyline) }))
 })
 
-// Map center (middle of route or default Utah)
+// Map center (middle of primary route or default Utah)
 const center = computed(() => {
-  if (routePoints.value.length > 0) {
-    const mid = Math.floor(routePoints.value.length / 2)
-    return routePoints.value[mid] as [number, number]
+  const primary = decodedRoutes.value[0]
+  if (primary && primary.points.length > 0) {
+    const mid = Math.floor(primary.points.length / 2)
+    return primary.points[mid] as [number, number]
   }
   return [40.45, -111.3] as [number, number]
 })
@@ -86,6 +93,16 @@ function eventColor(event: TrafficEvent): string {
   if (event.event_type === 'accidentsAndIncidents') return '#ea580c'
   return '#f59e0b'
 }
+
+function formatDuration(seconds: number): string {
+  const hrs = Math.floor(seconds / 3600)
+  const mins = Math.round((seconds % 3600) / 60)
+  return hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`
+}
+
+function formatDistance(meters: number): string {
+  return `${(meters / 1609.34).toFixed(1)} mi`
+}
 </script>
 
 <template>
@@ -96,14 +113,26 @@ function eventColor(event: TrafficEvent): string {
         attribution="&copy; OpenStreetMap contributors"
       />
 
-      <!-- Route polyline -->
+      <!-- Route polylines (render alternate routes first, primary on top) -->
       <LPolyline
-        v-if="routePoints.length"
-        :lat-lngs="routePoints"
-        :color="'#3b82f6'"
-        :weight="4"
-        :opacity="0.8"
-      />
+        v-for="(dr, i) in [...decodedRoutes].reverse()"
+        :key="`route-${dr.route.route_id}`"
+        :lat-lngs="dr.points"
+        :color="dr.route.color"
+        :weight="i === decodedRoutes.length - 1 ? 5 : 3"
+        :opacity="i === decodedRoutes.length - 1 ? 0.9 : 0.5"
+        :dash-array="i === decodedRoutes.length - 1 ? undefined : '8 6'"
+      >
+        <LPopup>
+          <div class="popup">
+            <strong>{{ dr.route.name }}</strong>
+            <div v-if="dr.route.distance_m" class="popup-road">
+              {{ formatDistance(dr.route.distance_m) }} &middot;
+              {{ formatDuration(dr.route.duration_in_traffic_s || dr.route.duration_s) }}
+            </div>
+          </div>
+        </LPopup>
+      </LPolyline>
 
       <!-- Camera markers -->
       <LCircleMarker
@@ -158,6 +187,21 @@ function eventColor(event: TrafficEvent): string {
         </LPopup>
       </LCircleMarker>
     </LMap>
+
+    <!-- Route legend -->
+    <div v-if="store.routes.length > 0" class="route-legend">
+      <div
+        v-for="r in store.routes"
+        :key="r.route_id"
+        class="legend-item"
+      >
+        <span class="legend-swatch" :style="{ backgroundColor: r.color }"></span>
+        <span class="legend-label">{{ r.name }}</span>
+        <span v-if="r.duration_s" class="legend-time">
+          {{ formatDuration(r.duration_in_traffic_s || r.duration_s) }}
+        </span>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -168,6 +212,7 @@ function eventColor(event: TrafficEvent): string {
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid var(--color-border);
+  position: relative;
 }
 
 @media (min-width: 768px) {
@@ -226,5 +271,45 @@ function eventColor(event: TrafficEvent): string {
   object-fit: cover;
   border-radius: 4px;
   margin-top: 0.3rem;
+}
+
+/* Route legend overlay */
+.route-legend {
+  position: absolute;
+  bottom: 0.5rem;
+  left: 0.5rem;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.75rem;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.legend-swatch {
+  width: 18px;
+  height: 4px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.legend-label {
+  font-weight: 500;
+  color: #374151;
+}
+
+.legend-time {
+  color: #6b7280;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
 }
 </style>

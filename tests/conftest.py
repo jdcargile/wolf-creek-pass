@@ -78,6 +78,9 @@ def sample_route():
     points = [(40.36, -111.14), (40.37, -111.12), (40.38, -111.10), (40.39, -111.08)]
     encoded = polyline_codec.encode(points)
     return Route(
+        route_id="parleys-wolfcreek",
+        name="Parley's / Wolf Creek",
+        color="#3b82f6",
         origin="Riverton, UT",
         destination="Hanna, UT",
         polyline=encoded,

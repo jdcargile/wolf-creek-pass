@@ -21,8 +21,8 @@ onMounted(async () => {
         <h1>Wolf Creek Pass</h1>
         <CycleSelector v-if="store.allCycles.length > 0" />
       </div>
-      <p class="subtitle" v-if="store.currentCycle?.route">
-        {{ store.currentCycle.route.origin }} &rarr; {{ store.currentCycle.route.destination }}
+      <p class="subtitle" v-if="store.primaryRoute">
+        {{ store.primaryRoute.origin }} &rarr; {{ store.primaryRoute.destination }}
       </p>
     </header>
 

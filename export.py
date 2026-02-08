@@ -56,7 +56,7 @@ def _write_json(key: str, data: dict, settings: Settings) -> str:
 def export_cycle_json(
     storage: Storage,
     cycle: CycleSummary,
-    route: Route | None = None,
+    routes: list[Route] | None = None,
 ) -> dict:
     """Build the full JSON payload for a capture cycle."""
     captures = storage.get_captures_by_cycle(cycle.cycle_id)
@@ -66,7 +66,7 @@ def export_cycle_json(
 
     return {
         "cycle": cycle.model_dump(),
-        "route": route.model_dump() if route else None,
+        "routes": [r.model_dump() for r in routes] if routes else [],
         "captures": [_capture_to_dict(c, storage) for c in captures],
         "conditions": [c.model_dump() for c in conditions],
         "events": [e.model_dump() for e in events],
@@ -77,14 +77,14 @@ def export_cycle_json(
 def export_cycle_to_file(
     storage: Storage,
     cycle: CycleSummary,
-    route: Route | None = None,
+    routes: list[Route] | None = None,
     settings: Settings | None = None,
 ) -> str:
     """Export a cycle's data to a JSON file (local or S3)."""
     if settings is None:
         settings = Settings()
 
-    data = export_cycle_json(storage, cycle, route)
+    data = export_cycle_json(storage, cycle, routes)
 
     # Per-cycle file
     safe_id = cycle.cycle_id.replace(":", "-")
