@@ -5,17 +5,27 @@ from pydantic_settings import BaseSettings
 
 
 # Hardcoded camera IDs along the Riverton -> Hanna route.
-# Route: I-15 S -> US-189 (Provo Canyon) -> US-40 (Heber -> Daniels Summit ->
-#         Strawberry) -> SR-35 (Wolf Creek Pass) -> Duchesne area
+# Primary route: I-215 E -> I-80 E (Parley's Canyon) -> US-40 (Heber ->
+#   Daniels Summit -> Strawberry) -> SR-35 (Wolf Creek Pass) -> Duchesne
+# Alternate: US-189 through Provo Canyon (kept for visibility)
 # Selected from UDOT's 2000+ cameras. Only fetch/analyze these.
 ROUTE_CAMERA_IDS: list[int] = [
-    # Provo Canyon (US-189)
-    90363,  # US-189 @ Mouth of Provo Canyon
-    87874,  # US-189 @ Springdell
-    90727,  # US-189 @ Canyon Glen Park
-    90626,  # US-189 @ Fishermen's
-    90728,  # US-189 @ Lower Deer Creek Rd
-    90275,  # US-189 @ Deer Creek Dam
+    # --- PRIMARY ROUTE ---
+    # I-215 East (Riverton -> I-80)
+    91683,  # I-215 S WB @ Union Park Ave
+    91581,  # I-215 E NB @ 6400 S
+    91614,  # I-215 E NB @ Parleys Canyon / 2900 S
+    # I-80 Parley's Canyon (SLC -> Park City)
+    91604,  # I-80 EB @ Mouth of Parley's Canyon
+    91619,  # I-80 EB @ Chain Up Area East
+    91746,  # I-80 EB @ MP 132.97
+    91642,  # I-80 EB @ East Canyon / SR-65
+    90912,  # I-80 EB @ Parley's Summit
+    91410,  # I-80 EB @ Parley's Canyon / MP 138
+    91425,  # I-80 EB @ Summit Park
+    91761,  # I-80 EB @ View Area
+    91736,  # I-80 EB @ West of US-40 junction
+    # --- SHARED (both routes merge here) ---
     # Heber Valley -> Daniels Summit (US-40)
     90389,  # US-40 @ US-189 / 1200 S, Heber
     90353,  # US-40 @ 100 S, Heber
@@ -36,6 +46,13 @@ ROUTE_CAMERA_IDS: list[int] = [
     90043,  # US-40 @ WA/DU County Line
     90661,  # US-40 @ MP 69.81
     89190,  # US-40 @ 100 W / US-191, Duchesne
+    # --- ALTERNATE: Provo Canyon (US-189) ---
+    90363,  # US-189 @ Mouth of Provo Canyon
+    87874,  # US-189 @ Springdell
+    90727,  # US-189 @ Canyon Glen Park
+    90626,  # US-189 @ Fishermen's
+    90728,  # US-189 @ Lower Deer Creek Rd
+    90275,  # US-189 @ Deer Creek Dam
 ]
 
 
