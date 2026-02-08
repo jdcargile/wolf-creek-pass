@@ -3,7 +3,7 @@
 > See PLAN.md for the full implementation plan.
 > This file tracks what's been done, what's in progress, and what's next.
 
-## Status: Phases 1-8 COMPLETE -- Ready for Phase 9 (LocalStack Integration)
+## Status: Phases 1-9 COMPLETE -- Ready for Phase 10 (Deploy + Test)
 
 ### Phase 1: Project Scaffolding (DONE)
 
@@ -123,15 +123,33 @@
 - [x] `pyproject.toml` -- added `cdk-synth` and `deploy` poe tasks
 - [x] `cdk synth` passes -- full CloudFormation template verified
 
-### Phase 9: LocalStack Integration (NEXT)
+### Phase 9: LocalStack Integration (DONE)
 
-- [ ] Verify `docker compose up -d` starts LocalStack
-- [ ] Run `poe monitor:once` with `STORAGE_BACKEND=dynamo` + `AWS_ENDPOINT_URL=http://localhost:4566`
-- [ ] Verify DynamoDB table + S3 bucket auto-created
-- [ ] Verify JSON exported to S3
-- [ ] Verify Vue dev server can fetch data
+- [x] `poe localstack-up` starts LocalStack (Docker Compose, DynamoDB + S3)
+- [x] DynamoStorage auto-creates table + bucket on `init()`
+- [x] Full round-trip verified against LocalStack:
+  - Camera save/retrieve
+  - Capture save/retrieve (with snow/car/animal flags)
+  - Cycle save/retrieve
+  - Image save to S3 + URL generation
+- [x] S3 JSON export verified:
+  - `data/cycle-{id}.json` -- per-cycle data
+  - `data/latest.json` -- most recent cycle
+  - `data/index.json` -- all cycles
+  - Content verified: cycle_id, captures array, has_snow flags all correct
+- [x] `.env.example` updated with better defaults + LocalStack instructions
+  - Default to `sqlite` (no Docker needed for basic dev)
+  - Commented-out LocalStack config ready to uncomment
+  - VITE_DATA_URL instructions for LocalStack/production
 
-### Phase 10: See PLAN.md
+### Phase 10: Deploy + Test (NEXT)
+
+- [ ] `poe deploy` -- build Vue + cdk deploy
+- [ ] Set SSM parameter values via AWS CLI
+- [ ] Verify Lambda fires on schedule
+- [ ] Verify S3 static site serves Vue app
+- [ ] Test on mobile browser
+- [ ] Verify historical cycle browsing works
 
 ---
 
@@ -147,8 +165,8 @@
 | 6 | Vue Frontend -- Layout + Map | DONE |
 | 7 | Vue Frontend -- Data + Components | DONE |
 | 8 | CDK Infrastructure | DONE |
-| 9 | LocalStack Integration | Next |
-| 10 | Deploy + Test | Not Started |
+| 9 | LocalStack Integration | DONE |
+| 10 | Deploy + Test | Next |
 
 ---
 
@@ -189,3 +207,9 @@
   - Updated cdk.json for uv-based invocation
   - Added poe tasks: cdk-synth, deploy
   - Verified cdk synth passes clean
+- Completed Phase 9 LocalStack integration:
+  - Started LocalStack via docker compose
+  - Verified DynamoDB + S3 auto-provisioning
+  - Full round-trip: camera, capture, cycle, image save/retrieve
+  - S3 JSON export: cycle files, latest.json, index.json all verified
+  - Updated .env.example with LocalStack instructions
