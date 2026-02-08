@@ -3,7 +3,7 @@
 > See PLAN.md for the full implementation plan.
 > This file tracks what's been done, what's in progress, and what's next.
 
-## Status: Phase 2 COMPLETE -- Ready for Phase 3
+## Status: Phases 1-7 COMPLETE -- Ready for Phase 8 (CDK Infrastructure)
 
 ### Phase 1: Project Scaffolding (DONE)
 
@@ -39,18 +39,72 @@
   - `SQLiteStorage`: 7 tables, full CRUD, local filesystem for images
   - `DynamoStorage`: single-table design with GSI1, S3 for images, LocalStack auto-init
   - `create_storage(settings)` factory function
-- [x] SQLiteStorage verified: full round-trip tests pass (camera, capture, cycle, route, condition, event, weather)
+- [x] SQLiteStorage verified: full round-trip tests pass
 - [x] DynamoStorage implemented (will be tested with LocalStack in Phase 9)
-- [x] Existing CLIs (traffic_cam_monitor.py, query_data.py) still import and work
 
-### Phase 3: Route Planning (NEXT)
+### Phase 3: Route Planning (DONE)
 
-- [ ] `route.py` -- Google Directions API (Riverton --> Hanna)
-- [ ] Decode route polyline into lat/lng points
-- [ ] Haversine distance calculation for camera-to-route matching
-- [ ] Filter UDOT cameras within ~2km of route
+- [x] `route.py` -- Google Directions API (Riverton -> Hanna)
+- [x] Polyline decoding via `polyline` library
+- [x] `haversine_km` distance calculation
+- [x] `min_distance_to_route` for proximity checks
+- [x] `filter_cameras_by_route` with configurable buffer (default 2km)
+- [x] Cameras sorted by position along route
 
-### Phase 4-10: See PLAN.md
+### Phase 4: UDOT API Expansion (DONE)
+
+- [x] `udot.py` -- all UDOT endpoints:
+  - Cameras: `fetch_all_cameras`, `fetch_route_cameras`
+  - Road conditions: `fetch_road_conditions`, `fetch_route_conditions`
+  - Events: `fetch_events`, `fetch_route_events`
+  - Weather: `fetch_weather_stations`, `fetch_route_weather`
+  - Mountain passes: `fetch_mountain_pass_info`
+  - Alerts: `fetch_alerts`
+  - Snow plows: `fetch_snow_plows`, `fetch_route_plows`
+- [x] All endpoints have route-filtered variants using haversine proximity
+
+### Phase 5: Refactor Monitor (DONE)
+
+- [x] `analyze.py` -- Claude Vision analysis extracted
+  - Magic-byte media type detection
+  - Works on raw bytes (no file dependency)
+  - Structured prompt for snow/cars/trucks/animals
+- [x] `traffic_cam_monitor.py` -- route-aware orchestrator
+  - Full capture cycle: route -> cameras -> download -> analyze -> conditions/events/weather -> store -> export
+  - Click CLI with `--once` flag and hourly schedule loop
+- [x] `export.py` -- JSON export for Vue frontend
+  - Per-cycle JSON files + latest.json + index.json
+- [x] `query_data.py` -- rewritten with storage abstraction
+  - 5 subcommands: recent, cycles, route, snow, animals
+  - Rich tables for display
+
+### Phase 6-7: Vue Frontend (DONE)
+
+- [x] TypeScript types (`src/types/index.ts`) mirroring all Pydantic models
+- [x] `useApi.ts` composable (fetch from JSON files, configurable via `VITE_DATA_URL`)
+- [x] `cycle.ts` Pinia store (state, computed getters, load actions)
+- [x] Components:
+  - `RouteMap.vue` -- Leaflet map, polyline route, color-coded camera markers, event markers, popups with images
+  - `CameraCard.vue` -- camera image, location, condition badges, analysis notes
+  - `CycleSelector.vue` -- dropdown to switch capture cycles
+  - `ConditionBadge.vue` -- reusable pill badge with danger/warning/info/default variants
+  - `RouteSummary.vue` -- horizontal stat bar (miles, drive time, cameras, snow, events)
+- [x] `HomeView.vue` -- full dashboard: header, route summary, map, weather grid, conditions, cameras, events, footer
+- [x] `App.vue` rewritten (stripped boilerplate, simple RouterView shell)
+- [x] `base.css` -- project design tokens (light/dark mode, surfaces, borders, text, semantic colors)
+- [x] `main.css` -- minimal app styles importing base.css
+- [x] `router/index.ts` simplified (single route, no About page)
+- [x] Vite config: custom plugin to serve `../output/data/` at `/data` during dev
+- [x] `vue-tsc --noEmit` passes (zero type errors)
+- [x] `npm run build` passes (production build: ~117KB app JS + ~149KB Leaflet)
+
+### Phase 8: CDK Infrastructure (NEXT)
+
+- [ ] Dockerfile for Lambda
+- [ ] Verify `cdk synth`
+- [ ] Test `cdk diff`
+
+### Phase 9-10: See PLAN.md
 
 ---
 
@@ -60,12 +114,12 @@
 |-------|-------------|--------|
 | 1 | Project Scaffolding | DONE |
 | 2 | Storage Abstraction (DynamoDB + SQLite) | DONE |
-| 3 | Route Planning (Google Directions API) | Next |
-| 4 | UDOT API Expansion (all endpoints) | Not Started |
-| 5 | Refactor Monitor (route-aware orchestrator) | Not Started |
-| 6 | Vue Frontend -- Layout + Map | Not Started |
-| 7 | Vue Frontend -- Data + Components | Not Started |
-| 8 | CDK Infrastructure | Not Started |
+| 3 | Route Planning (Google Directions API) | DONE |
+| 4 | UDOT API Expansion (all endpoints) | DONE |
+| 5 | Refactor Monitor (route-aware orchestrator) | DONE |
+| 6 | Vue Frontend -- Layout + Map | DONE |
+| 7 | Vue Frontend -- Data + Components | DONE |
+| 8 | CDK Infrastructure | Next |
 | 9 | LocalStack Integration | Not Started |
 | 10 | Deploy + Test | Not Started |
 
@@ -81,13 +135,21 @@
 - Researched Google Directions API pricing ($0 for our usage)
 - Made architecture decisions: AWS, DynamoDB, Vue 3 + TypeScript, CDK, LocalStack
 - Wrote PLAN.md
-- Completed Phase 1 scaffolding:
-  - Vue 3 + TypeScript (Vite, Router, Pinia, Leaflet)
-  - CDK stack (DynamoDB, S3, Lambda, EventBridge)
-  - Docker Compose (LocalStack)
-  - Updated pyproject.toml to v0.2.0 with all new deps
-  - .gitignore, poe tasks, verification complete
-- Completed Phase 2 storage abstraction:
-  - settings.py, expanded models.py, storage.py
-  - SQLiteStorage + DynamoStorage + Protocol + factory
-  - Full round-trip tests passing for SQLiteStorage
+- Completed Phase 1 scaffolding
+- Completed Phase 2 storage abstraction
+- Completed Phase 3 route planning
+- Completed Phase 4 UDOT API expansion
+- Completed Phase 5 monitor refactor
+- Completed Phase 6-7 Vue frontend (types, store, composables, 5 components, dashboard)
+
+### 2026-02-07 (Session 2)
+- Initial git commit (57 files, 10k+ lines -- nothing had been committed!)
+- Finished frontend cleanup:
+  - Rewrote App.vue (stripped Vue boilerplate)
+  - Rewrote base.css with project design tokens (light/dark mode)
+  - Rewrote main.css (minimal, project-specific)
+  - Simplified router (removed About route)
+  - Added Vite dev server plugin to serve output/data/ at /data
+  - Fixed RouteMap.vue TypeScript error (computed type assertion)
+- Fixed npm rollup-darwin-arm64 issue (force installed native module)
+- Verified: vue-tsc passes, npm run build passes

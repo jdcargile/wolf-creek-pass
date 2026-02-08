@@ -51,12 +51,12 @@ const routePoints = computed(() => {
 })
 
 // Map center (middle of route or default Utah)
-const center = computed<[number, number]>(() => {
+const center = computed(() => {
   if (routePoints.value.length > 0) {
     const mid = Math.floor(routePoints.value.length / 2)
-    return routePoints.value[mid]
+    return routePoints.value[mid] as [number, number]
   }
-  return [40.45, -111.3]
+  return [40.45, -111.3] as [number, number]
 })
 
 // Camera markers
