@@ -76,9 +76,8 @@ export const useCycleStore = defineStore('cycle', () => {
     return all.filter((w) => WEATHER_STATION_NAMES.has(w.station_name.toLowerCase()))
   })
 
-  // Camera and snow counts
+  // Camera count
   const cameraCount = computed(() => currentCycle.value?.cycle.cameras_processed ?? 0)
-  const snowCount = computed(() => currentCycle.value?.cycle.snow_count ?? 0)
 
   // Wolf Creek pass helpers
   const wolfCreekPass = computed<MountainPass | null>(() =>
@@ -164,7 +163,6 @@ export const useCycleStore = defineStore('cycle', () => {
     captures,
     weather,
     cameraCount,
-    snowCount,
     wolfCreekPass,
     wolfCreekClosed,
     // Actions

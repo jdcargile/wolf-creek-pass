@@ -1,7 +1,6 @@
 """Tests for models.py -- Pydantic model construction and serialization."""
 
 from models import (
-    AnalysisResult,
     Camera,
     CameraView,
     CaptureRecord,
@@ -34,18 +33,6 @@ class TestCamera:
         assert cam2.Latitude == sample_camera.Latitude
 
 
-class TestAnalysisResult:
-    def test_defaults(self):
-        r = AnalysisResult()
-        assert r.has_snow is None
-        assert r.notes == ""
-
-    def test_explicit(self):
-        r = AnalysisResult(has_snow=True, has_car=False, notes="test")
-        assert r.has_snow is True
-        assert r.has_car is False
-
-
 class TestCaptureRecord:
     def test_has_captured_at_default(self):
         c = CaptureRecord(camera_id=1, cycle_id="test")
@@ -53,8 +40,8 @@ class TestCaptureRecord:
         assert "T" in c.captured_at  # ISO format
 
     def test_full(self, sample_capture):
-        assert sample_capture.has_snow is True
         assert sample_capture.roadway == "SR-35"
+        assert sample_capture.camera_id == 100
 
 
 class TestRoute:
@@ -82,13 +69,13 @@ class TestCycleSummary:
     def test_defaults(self):
         c = CycleSummary(cycle_id="test", started_at="2026-01-01")
         assert c.cameras_processed == 0
-        assert c.snow_count == 0
+        assert c.event_count == 0
 
     def test_serialization(self, sample_cycle):
         data = sample_cycle.model_dump()
         assert data["cycle_id"] == "2026-02-07T12:00:00"
         c2 = CycleSummary.model_validate(data)
-        assert c2.snow_count == sample_cycle.snow_count
+        assert c2.event_count == sample_cycle.event_count
 
 
 class TestRoadCondition:

@@ -32,10 +32,6 @@ const store = useCycleStore()
       <span class="stat-value">{{ store.cameraCount }}</span>
       <span class="stat-label">cameras</span>
     </div>
-    <div class="stat" :class="{ 'stat-danger': store.snowCount > 0 }">
-      <span class="stat-value">{{ store.snowCount }}</span>
-      <span class="stat-label">{{ store.snowCount > 0 ? 'snow!' : 'clear' }}</span>
-    </div>
     <div class="stat" v-if="store.plowCount > 0">
       <span class="stat-value stat-plow">{{ store.plowCount }}</span>
       <span class="stat-label">plows out</span>
@@ -82,10 +78,6 @@ const store = useCycleStore()
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-top: 0.1rem;
-}
-
-.stat-danger .stat-value {
-  color: var(--color-danger);
 }
 
 .stat-badge {

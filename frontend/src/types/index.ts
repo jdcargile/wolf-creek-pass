@@ -5,7 +5,6 @@ export interface CycleSummary {
   started_at: string
   completed_at: string
   cameras_processed: number
-  snow_count: number
   event_count: number
   travel_time_s: number | null
   distance_m: number | null
@@ -17,11 +16,6 @@ export interface CaptureRecord {
   captured_at: string
   image_key: string
   image_url?: string
-  has_snow: boolean | null
-  has_car: boolean | null
-  has_truck: boolean | null
-  has_animal: boolean | null
-  analysis_notes: string
   roadway: string | null
   direction: string | null
   location: string | null

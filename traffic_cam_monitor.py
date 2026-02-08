@@ -6,7 +6,7 @@ Orchestrates the full capture cycle:
 1. Check Wolf Creek Pass closure status (UDOT API)
 2. Get routes (UDOT 511 shared route API)
 3. Fetch cameras along routes (conditional on closure status)
-4. Download + analyze camera images (Claude Vision)
+4. Download camera images and store them
 5. Fetch road conditions, events, weather, passes, plows (UDOT API)
 6. Store everything (DynamoDB or SQLite)
 7. Export JSON for Vue frontend
@@ -16,14 +16,12 @@ import hashlib
 import time
 from datetime import datetime
 
-import anthropic
 import click
 import requests
 import schedule
 from rich.console import Console
 from rich.panel import Panel
 
-from analyze import analyze_image_bytes
 from export import export_cycle_index, export_cycle_to_file
 from models import CaptureRecord, CycleSummary
 from route import get_routes
@@ -84,9 +82,7 @@ def run_capture_cycle(settings: Settings) -> None:
         f"hardcoded route cameras"
     )
 
-    # 4. Download images + analyze with Claude Vision
-    vision_client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-    snow_count = 0
+    # 4. Download camera images
     skipped_count = 0
 
     for camera in cameras:
@@ -103,13 +99,13 @@ def run_capture_cycle(settings: Settings) -> None:
         if not image_data:
             continue
 
-        # Check image hash -- skip analysis if unchanged from last cycle
+        # Check image hash -- skip save if unchanged from last cycle
         image_hash = hashlib.sha256(image_data).hexdigest()
         prev_hash = storage.get_image_hash(camera.Id)
 
         if prev_hash == image_hash:
-            # Image unchanged -- reuse previous analysis
-            console.print("  [dim]Image unchanged -- skipping analysis[/dim]")
+            # Image unchanged -- reuse previous image key
+            console.print("  [dim]Image unchanged -- skipping[/dim]")
             skipped_count += 1
             prev_captures = storage.get_recent_captures(limit=100)
             prev = next((c for c in prev_captures if c.camera_id == camera.Id), None)
@@ -117,11 +113,6 @@ def run_capture_cycle(settings: Settings) -> None:
                 camera_id=camera.Id,
                 cycle_id=cycle_id,
                 image_key=prev.image_key if prev else "",
-                has_snow=prev.has_snow if prev else None,
-                has_car=prev.has_car if prev else None,
-                has_truck=prev.has_truck if prev else None,
-                has_animal=prev.has_animal if prev else None,
-                analysis_notes=(prev.analysis_notes if prev else "") + " [cached]",
                 roadway=camera.Roadway,
                 direction=camera.Direction,
                 location=camera.Location,
@@ -129,29 +120,19 @@ def run_capture_cycle(settings: Settings) -> None:
                 longitude=camera.Longitude,
             )
             storage.save_capture(capture)
-            if capture.has_snow:
-                snow_count += 1
             continue
 
-        # New image -- save and analyze
+        # New image -- save
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         image_key = f"cam_{camera.Id}_{timestamp}.jpg"
         storage.save_image(image_key, image_data)
         storage.save_image_hash(camera.Id, image_hash)
-
-        # Analyze with Claude Vision
-        analysis = analyze_image_bytes(vision_client, image_data)
 
         # Build capture record (denormalized)
         capture = CaptureRecord(
             camera_id=camera.Id,
             cycle_id=cycle_id,
             image_key=image_key,
-            has_snow=analysis.has_snow,
-            has_car=analysis.has_car,
-            has_truck=analysis.has_truck,
-            has_animal=analysis.has_animal,
-            analysis_notes=analysis.notes,
             roadway=camera.Roadway,
             direction=camera.Direction,
             location=camera.Location,
@@ -159,19 +140,7 @@ def run_capture_cycle(settings: Settings) -> None:
             longitude=camera.Longitude,
         )
         storage.save_capture(capture)
-
-        if analysis.has_snow:
-            snow_count += 1
-
-        # Display results
-        snow = "[red]SNOW[/red]" if analysis.has_snow else "[green]Clear[/green]"
-        cars = "Cars" if analysis.has_car else ""
-        trucks = "Trucks" if analysis.has_truck else ""
-        animals = "[yellow]ANIMALS[/yellow]" if analysis.has_animal else ""
-        flags = " | ".join(f for f in [snow, cars, trucks, animals] if f)
-        console.print(f"  {flags}")
-        if analysis.notes:
-            console.print(f"  [dim]{analysis.notes}[/dim]")
+        console.print("  [green]Saved[/green]")
 
     # 5. Fetch UDOT enrichment data (non-fatal -- don't let this block export)
     conditions, events, weather = [], [], []
@@ -218,7 +187,6 @@ def run_capture_cycle(settings: Settings) -> None:
     # 6. Save cycle summary (use primary route for travel time/distance)
     cycle.completed_at = datetime.now().isoformat()
     cycle.cameras_processed = len(cameras)
-    cycle.snow_count = snow_count
     cycle.event_count = len(events)
     cycle.travel_time_s = primary_route.duration_s if primary_route else None
     cycle.distance_m = primary_route.distance_m if primary_route else None
@@ -231,8 +199,7 @@ def run_capture_cycle(settings: Settings) -> None:
     analyzed = len(cameras) - skipped_count
     console.rule(
         f"[bold blue]Cycle complete -- {len(cameras)} cameras, "
-        f"{analyzed} analyzed, {skipped_count} cached, "
-        f"{snow_count} with snow[/bold blue]"
+        f"{analyzed} new, {skipped_count} cached[/bold blue]"
     )
 
 

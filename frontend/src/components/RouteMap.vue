@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { LMap, LTileLayer, LPolyline, LPopup, LCircleMarker } from '@vue-leaflet/vue-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useCycleStore } from '@/stores/cycle'
-import type { CaptureRecord, MountainPass, Route } from '@/types'
+import type { MountainPass, Route } from '@/types'
 
 const store = useCycleStore()
 const mapRef = ref<InstanceType<typeof LMap> | null>(null)
@@ -110,9 +110,7 @@ const plowMarkers = computed(() => {
 })
 
 // --- Color helpers ---
-function cameraColor(capture: CaptureRecord): string {
-  if (capture.has_snow) return '#dc2626'
-  if (capture.has_animal) return '#ca8a04'
+function cameraColor(): string {
   return '#16a34a'
 }
 
@@ -228,8 +226,8 @@ function formatDistance(meters: number): string {
         :key="`cam-${capture.camera_id}`"
         :lat-lng="[capture.latitude!, capture.longitude!]"
         :radius="8"
-        :color="cameraColor(capture)"
-        :fill-color="cameraColor(capture)"
+        :color="cameraColor()"
+        :fill-color="cameraColor()"
         :fill-opacity="0.8"
       >
         <LPopup>
@@ -237,13 +235,6 @@ function formatDistance(meters: number): string {
             <strong>{{ capture.location }}</strong>
             <br />
             <span class="popup-road">{{ capture.roadway }} {{ capture.direction }}</span>
-            <div class="popup-badges">
-              <span v-if="capture.has_snow" class="popup-tag popup-tag--danger">Snow</span>
-              <span v-if="capture.has_car" class="popup-tag">Cars</span>
-              <span v-if="capture.has_truck" class="popup-tag">Trucks</span>
-              <span v-if="capture.has_animal" class="popup-tag popup-tag--warning">Animals</span>
-            </div>
-            <p v-if="capture.analysis_notes" class="popup-notes">{{ capture.analysis_notes }}</p>
             <img
               v-if="capture.image_url"
               :src="capture.image_url"

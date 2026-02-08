@@ -20,8 +20,6 @@ def lambda_handler(event: dict, context) -> dict:
     params = ssm.get_parameters(
         Names=[
             "/wolf-creek-pass/udot-api-key",
-            "/wolf-creek-pass/anthropic-api-key",
-            "/wolf-creek-pass/google-maps-api-key",
         ],
         WithDecryption=True,
     )
@@ -30,12 +28,6 @@ def lambda_handler(event: dict, context) -> dict:
 
     # Set env vars so Settings picks them up via pydantic-settings
     os.environ["UDOT_API_KEY"] = param_map.get("/wolf-creek-pass/udot-api-key", "")
-    os.environ["ANTHROPIC_API_KEY"] = param_map.get(
-        "/wolf-creek-pass/anthropic-api-key", ""
-    )
-    os.environ["GOOGLE_MAPS_API_KEY"] = param_map.get(
-        "/wolf-creek-pass/google-maps-api-key", ""
-    )
 
     # TABLE_NAME and BUCKET_NAME are set by CDK as Lambda env vars
     os.environ.setdefault("STORAGE_BACKEND", "dynamo")

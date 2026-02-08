@@ -19,7 +19,6 @@ from models import (
 
 # Ensure settings can be constructed without a real .env
 os.environ.setdefault("UDOT_API_KEY", "test-key")
-os.environ.setdefault("ANTHROPIC_API_KEY", "test-key")
 os.environ.setdefault("STORAGE_BACKEND", "sqlite")
 
 
@@ -97,11 +96,6 @@ def sample_capture():
         camera_id=100,
         cycle_id="2026-02-07T12:00:00",
         image_key="cam_100_20260207_120000.jpg",
-        has_snow=True,
-        has_car=True,
-        has_truck=False,
-        has_animal=False,
-        analysis_notes="Heavy snow on road surface",
         roadway="SR-35",
         direction="NB",
         location="Wolf Creek Pass Summit",
@@ -117,7 +111,6 @@ def sample_cycle():
         started_at="2026-02-07T12:00:00",
         completed_at="2026-02-07T12:05:00",
         cameras_processed=3,
-        snow_count=1,
         event_count=2,
         travel_time_s=7200,
         distance_m=145000,

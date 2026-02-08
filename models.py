@@ -28,34 +28,16 @@ class Camera(BaseModel):
     distance_from_route_km: float | None = None
 
 
-# ---- Analysis Models ----
-
-
-class AnalysisResult(BaseModel):
-    """Structured result from Claude Vision image analysis."""
-
-    has_snow: bool | None = None
-    has_car: bool | None = None
-    has_truck: bool | None = None
-    has_animal: bool | None = None
-    notes: str = ""
-
-
 # ---- Capture Record (stored in DB) ----
 
 
 class CaptureRecord(BaseModel):
-    """A single camera capture with analysis results."""
+    """A single camera capture record."""
 
     camera_id: int
     cycle_id: str
     captured_at: str = Field(default_factory=lambda: datetime.now().isoformat())
     image_key: str = ""  # S3 key or local file path
-    has_snow: bool | None = None
-    has_car: bool | None = None
-    has_truck: bool | None = None
-    has_animal: bool | None = None
-    analysis_notes: str = ""
     # Denormalized camera info (for DynamoDB single-table)
     roadway: str | None = None
     direction: str | None = None
@@ -191,7 +173,6 @@ class CycleSummary(BaseModel):
     started_at: str
     completed_at: str = ""
     cameras_processed: int = 0
-    snow_count: int = 0
     event_count: int = 0
     travel_time_s: int | None = None
     distance_m: int | None = None

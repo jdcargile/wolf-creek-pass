@@ -83,30 +83,12 @@ class WolfCreekPassStack(Stack):
         # ---- SSM Parameters (placeholders -- set actual values via CLI) ----
         # After deploy, set real values:
         #   aws ssm put-parameter --name /wolf-creek-pass/udot-api-key --value YOUR_KEY --type String --overwrite
-        #   aws ssm put-parameter --name /wolf-creek-pass/anthropic-api-key --value YOUR_KEY --type String --overwrite
-        #   aws ssm put-parameter --name /wolf-creek-pass/google-maps-api-key --value YOUR_KEY --type String --overwrite
         udot_param = ssm.StringParameter(
             self,
             "UdotApiKeyParam",
             parameter_name="/wolf-creek-pass/udot-api-key",
             string_value="REPLACE_ME",
             description="UDOT Traffic API key",
-        )
-
-        anthropic_param = ssm.StringParameter(
-            self,
-            "AnthropicApiKeyParam",
-            parameter_name="/wolf-creek-pass/anthropic-api-key",
-            string_value="REPLACE_ME",
-            description="Anthropic API key",
-        )
-
-        google_param = ssm.StringParameter(
-            self,
-            "GoogleMapsApiKeyParam",
-            parameter_name="/wolf-creek-pass/google-maps-api-key",
-            string_value="REPLACE_ME",
-            description="Google Maps API key",
         )
 
         # ---- Lambda Function ----
@@ -128,8 +110,6 @@ class WolfCreekPassStack(Stack):
         table.grant_read_write_data(capture_fn)
         bucket.grant_read_write(capture_fn)
         udot_param.grant_read(capture_fn)
-        anthropic_param.grant_read(capture_fn)
-        google_param.grant_read(capture_fn)
 
         # ---- EventBridge Rule (hourly) ----
         events.Rule(

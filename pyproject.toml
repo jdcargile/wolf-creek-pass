@@ -1,10 +1,9 @@
 [project]
 name = "wolf-creek-pass"
 version = "0.2.0"
-description = "Route-aware road conditions dashboard for Wolf Creek Pass (SR-35), powered by Claude Vision"
+description = "Route-aware road conditions dashboard for Wolf Creek Pass (SR-35)"
 requires-python = ">=3.11"
 dependencies = [
-    "anthropic>=0.39.0",
     "boto3>=1.35.0",
     "click>=8.1.0",
     "polyline>=2.0.0",
@@ -24,8 +23,6 @@ wolf-creek-query = "query_data:cli"
 monitor = { cmd = "python traffic_cam_monitor.py", help = "Start the traffic camera monitor (runs hourly)" }
 "monitor:once" = { cmd = "python traffic_cam_monitor.py --once", help = "Run a single capture cycle" }
 query = { cmd = "python query_data.py recent", help = "Show recent captures" }
-query-snow = { cmd = "python query_data.py snow", help = "Show snow conditions" }
-query-animals = { cmd = "python query_data.py animals", help = "Show animal sightings" }
 query-cycles = { cmd = "python query_data.py cycles", help = "Show capture cycle history" }
 query-route = { cmd = "python query_data.py route", help = "Show current route info" }
 dev = { cmd = "npm run dev", cwd = "frontend", help = "Start Vue dev server (Vite)" }

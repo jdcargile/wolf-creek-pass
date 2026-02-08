@@ -91,7 +91,7 @@ class Storage(Protocol):
     def save_image(self, key: str, data: bytes) -> str: ...
     def get_image_url(self, key: str) -> str: ...
 
-    # Image hashes (for dedup -- skip analysis if image unchanged)
+    # Image hashes (for dedup -- skip save if image unchanged)
     def get_image_hash(self, camera_id: int) -> str | None: ...
     def save_image_hash(self, camera_id: int, hash_hex: str) -> None: ...
 
@@ -136,11 +136,6 @@ class SQLiteStorage:
                 cycle_id TEXT,
                 captured_at TEXT,
                 image_key TEXT,
-                has_snow INTEGER,
-                has_car INTEGER,
-                has_truck INTEGER,
-                has_animal INTEGER,
-                analysis_notes TEXT,
                 roadway TEXT,
                 direction TEXT,
                 location TEXT,
@@ -174,7 +169,6 @@ class SQLiteStorage:
                 started_at TEXT,
                 completed_at TEXT,
                 cameras_processed INTEGER,
-                snow_count INTEGER,
                 event_count INTEGER,
                 travel_time_s INTEGER,
                 distance_m INTEGER
@@ -326,19 +320,14 @@ class SQLiteStorage:
         conn = self._conn()
         conn.execute(
             """INSERT INTO captures
-            (camera_id, cycle_id, captured_at, image_key, has_snow, has_car, has_truck, has_animal,
-             analysis_notes, roadway, direction, location, latitude, longitude)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (camera_id, cycle_id, captured_at, image_key,
+             roadway, direction, location, latitude, longitude)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 capture.camera_id,
                 capture.cycle_id,
                 capture.captured_at,
                 capture.image_key,
-                _bool_to_int(capture.has_snow),
-                _bool_to_int(capture.has_car),
-                _bool_to_int(capture.has_truck),
-                _bool_to_int(capture.has_animal),
-                capture.analysis_notes,
                 capture.roadway,
                 capture.direction,
                 capture.location,
@@ -425,15 +414,14 @@ class SQLiteStorage:
         conn = self._conn()
         conn.execute(
             """INSERT OR REPLACE INTO cycles
-            (cycle_id, started_at, completed_at, cameras_processed, snow_count, event_count,
+            (cycle_id, started_at, completed_at, cameras_processed, event_count,
              travel_time_s, distance_m)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            VALUES (?, ?, ?, ?, ?, ?, ?)""",
             (
                 cycle.cycle_id,
                 cycle.started_at,
                 cycle.completed_at,
                 cycle.cameras_processed,
-                cycle.snow_count,
                 cycle.event_count,
                 cycle.travel_time_s,
                 cycle.distance_m,
@@ -454,7 +442,6 @@ class SQLiteStorage:
                 started_at=r["started_at"],
                 completed_at=r["completed_at"] or "",
                 cameras_processed=r["cameras_processed"] or 0,
-                snow_count=r["snow_count"] or 0,
                 event_count=r["event_count"] or 0,
                 travel_time_s=r["travel_time_s"],
                 distance_m=r["distance_m"],
@@ -875,11 +862,6 @@ class DynamoStorage:
                     "cycle_id": capture.cycle_id,
                     "captured_at": capture.captured_at,
                     "image_key": capture.image_key,
-                    "has_snow": capture.has_snow,
-                    "has_car": capture.has_car,
-                    "has_truck": capture.has_truck,
-                    "has_animal": capture.has_animal,
-                    "analysis_notes": capture.analysis_notes,
                     "roadway": capture.roadway,
                     "direction": capture.direction,
                     "location": capture.location,
@@ -911,11 +893,6 @@ class DynamoStorage:
                 cycle_id=item.get("cycle_id", cycle_id),
                 captured_at=item.get("captured_at", ""),
                 image_key=item.get("image_key", ""),
-                has_snow=item.get("has_snow"),
-                has_car=item.get("has_car"),
-                has_truck=item.get("has_truck"),
-                has_animal=item.get("has_animal"),
-                analysis_notes=item.get("analysis_notes", ""),
                 roadway=item.get("roadway"),
                 direction=item.get("direction"),
                 location=item.get("location"),
@@ -992,7 +969,6 @@ class DynamoStorage:
                     "started_at": cycle.started_at,
                     "completed_at": cycle.completed_at,
                     "cameras_processed": cycle.cameras_processed,
-                    "snow_count": cycle.snow_count,
                     "event_count": cycle.event_count,
                     "travel_time_s": cycle.travel_time_s,
                     "distance_m": cycle.distance_m,
@@ -1016,7 +992,6 @@ class DynamoStorage:
                 started_at=item.get("started_at", ""),
                 completed_at=item.get("completed_at", ""),
                 cameras_processed=int(item.get("cameras_processed", 0)),
-                snow_count=int(item.get("snow_count", 0)),
                 event_count=int(item.get("event_count", 0)),
                 travel_time_s=_int_safe(item.get("travel_time_s")),
                 distance_m=_int_safe(item.get("distance_m")),
@@ -1335,23 +1310,12 @@ def _row_to_capture(r: sqlite3.Row) -> CaptureRecord:
         cycle_id=r["cycle_id"] or "",
         captured_at=r["captured_at"] or "",
         image_key=r["image_key"] or "",
-        has_snow=_int_to_bool(r["has_snow"]),
-        has_car=_int_to_bool(r["has_car"]),
-        has_truck=_int_to_bool(r["has_truck"]),
-        has_animal=_int_to_bool(r["has_animal"]),
-        analysis_notes=r["analysis_notes"] or "",
         roadway=r["roadway"],
         direction=r["direction"],
         location=r["location"],
         latitude=r["latitude"],
         longitude=r["longitude"],
     )
-
-
-def _int_to_bool(val: int | None) -> bool | None:
-    if val is None:
-        return None
-    return bool(val)
 
 
 def _strip_none(d: dict) -> dict:

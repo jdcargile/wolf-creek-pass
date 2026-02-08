@@ -61,13 +61,13 @@ class TestSQLiteStorageCaptures:
         captures = sqlite_storage.get_recent_captures(limit=10)
         assert len(captures) == 1
         assert captures[0].camera_id == 100
-        assert captures[0].has_snow is True
+        assert captures[0].roadway == "SR-35"
 
     def test_get_by_cycle(self, sqlite_storage, sample_capture):
         sqlite_storage.save_capture(sample_capture)
         captures = sqlite_storage.get_captures_by_cycle("2026-02-07T12:00:00")
         assert len(captures) == 1
-        assert captures[0].analysis_notes == "Heavy snow on road surface"
+        assert captures[0].location == "Wolf Creek Pass Summit"
 
     def test_get_by_cycle_empty(self, sqlite_storage):
         captures = sqlite_storage.get_captures_by_cycle("nonexistent")

@@ -110,7 +110,6 @@ class Settings(BaseSettings):
 
     # API keys
     udot_api_key: str = PydanticField(description="UDOT Traffic API key")
-    anthropic_api_key: str = PydanticField(description="Anthropic API key")
 
     # Storage backend
     storage_backend: str = PydanticField(
@@ -131,4 +130,4 @@ class Settings(BaseSettings):
         default="wolf-creek-pass", description="S3 bucket name"
     )
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
