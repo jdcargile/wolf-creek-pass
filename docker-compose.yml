@@ -1,0 +1,17 @@
+services:
+  localstack:
+    image: localstack/localstack:latest
+    container_name: wolf-creek-localstack
+    ports:
+      - "4566:4566"           # LocalStack gateway
+      - "4510-4559:4510-4559" # External service ports
+    environment:
+      - SERVICES=dynamodb,s3
+      - DEBUG=0
+      - AWS_DEFAULT_REGION=us-west-2
+    volumes:
+      - localstack_data:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  localstack_data:

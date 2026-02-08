@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+build/
+
+# Environment
+.env
+
+# SQLite
+*.db
+
+# Images (downloaded from UDOT)
+images/
+
+# Output (generated reports)
+output/
+
+# Node / Vue
+frontend/node_modules/
+frontend/dist/
+
+# CDK
+infra/.venv/
+infra/cdk.out/
+infra/.cdk.staging/
+
+# LocalStack
+localstack_data/
+
+# OS
+.DS_Store
+
+# uv
+uv.lock
