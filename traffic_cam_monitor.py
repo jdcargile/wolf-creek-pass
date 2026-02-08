@@ -161,21 +161,29 @@ def run_capture_cycle(settings: Settings) -> None:
         if analysis.notes:
             console.print(f"  [dim]{analysis.notes}[/dim]")
 
-    # 4. Fetch UDOT enrichment data
+    # 4. Fetch UDOT enrichment data (non-fatal -- don't let this block export)
+    conditions, events, weather = [], [], []
     if route:
-        conditions = fetch_route_conditions(settings.udot_api_key, route)
-        storage.save_road_conditions(cycle_id, conditions)
-        console.print(f"Saved [bold]{len(conditions)}[/bold] road conditions")
+        try:
+            conditions = fetch_route_conditions(settings.udot_api_key, route)
+            storage.save_road_conditions(cycle_id, conditions)
+            console.print(f"Saved [bold]{len(conditions)}[/bold] road conditions")
+        except Exception as e:
+            console.print(f"[yellow]Road conditions failed (continuing):[/yellow] {e}")
 
-        events = fetch_route_events(settings.udot_api_key, route)
-        storage.save_events(cycle_id, events)
-        console.print(f"Saved [bold]{len(events)}[/bold] events")
+        try:
+            events = fetch_route_events(settings.udot_api_key, route)
+            storage.save_events(cycle_id, events)
+            console.print(f"Saved [bold]{len(events)}[/bold] events")
+        except Exception as e:
+            console.print(f"[yellow]Events failed (continuing):[/yellow] {e}")
 
-        weather = fetch_route_weather(settings.udot_api_key, route)
-        storage.save_weather(cycle_id, weather)
-        console.print(f"Saved [bold]{len(weather)}[/bold] weather stations")
-    else:
-        conditions, events, weather = [], [], []
+        try:
+            weather = fetch_route_weather(settings.udot_api_key, route)
+            storage.save_weather(cycle_id, weather)
+            console.print(f"Saved [bold]{len(weather)}[/bold] weather stations")
+        except Exception as e:
+            console.print(f"[yellow]Weather failed (continuing):[/yellow] {e}")
 
     # 5. Save cycle summary
     cycle.completed_at = datetime.now().isoformat()
