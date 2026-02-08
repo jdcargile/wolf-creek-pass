@@ -37,10 +37,19 @@ cdk-synth = { shell = "cd infra && npx aws-cdk synth", help = "Synthesize CloudF
 cdk-deploy = { shell = "cd infra && npx aws-cdk deploy --require-approval never", help = "Deploy AWS infrastructure" }
 cdk-diff = { shell = "cd infra && npx aws-cdk diff", help = "Preview infrastructure changes" }
 deploy = { shell = "cd frontend && npm run build && cd ../infra && npx aws-cdk deploy --require-approval never", help = "Build Vue + deploy full stack" }
+test = { cmd = "uv run --group dev pytest -v", help = "Run test suite" }
+"test:cov" = { cmd = "uv run --group dev pytest -v --cov=. --cov-report=term-missing", help = "Run tests with coverage" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
 
 [dependency-groups]
 dev = [
     "poethepoet>=0.31.0",
     "aws-cdk-lib>=2.100.0",
     "constructs>=10.0.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+    "responses>=0.25.0",
 ]

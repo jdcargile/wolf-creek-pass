@@ -3,7 +3,7 @@
 > See PLAN.md for the full implementation plan.
 > This file tracks what's been done, what's in progress, and what's next.
 
-## Status: Phases 1-9 COMPLETE -- Ready for Phase 10 (Deploy + Test)
+## Status: Phases 1-9 + Test Suite COMPLETE -- Ready for Phase 10 (Deploy + Test)
 
 ### Phase 1: Project Scaffolding (DONE)
 
@@ -142,6 +142,20 @@
   - Commented-out LocalStack config ready to uncomment
   - VITE_DATA_URL instructions for LocalStack/production
 
+### Test Suite (DONE)
+
+- [x] Added test deps: `pytest`, `pytest-cov`, `responses`
+- [x] `pyproject.toml` -- pytest config, poe test/test:cov tasks
+- [x] `tests/conftest.py` -- shared fixtures (cameras, routes, captures, cycles, conditions, events, weather, SQLiteStorage)
+- [x] **test_analyze.py** (13 tests) -- `detect_media_type` (6 formats), `parse_analysis_response` (7 scenarios)
+- [x] **test_route.py** (11 tests) -- `haversine_km` (4 tests), `decode_route_points` (2), `min_distance_to_route` (3), `filter_cameras_by_route` (4: proximity, empty polyline, distance field, sort order)
+- [x] **test_models.py** (14 tests) -- all 9 Pydantic models: construction, defaults, serialization roundtrip
+- [x] **test_storage.py** (19 tests) -- helpers (2), factory (1), SQLiteStorage full CRUD: cameras (2), captures (3), routes (2), cycles (2), conditions (2), events (2), weather (2), images (1)
+- [x] **test_udot.py** (9 tests) -- `_fetch` (3: success, non-list, HTTP error), camera parsing (1), route filtering: conditions by roadway name (1), events by proximity (1), weather by station name (1), mountain pass search (2)
+- [x] **test_export.py** (6 tests) -- JSON structure (2), file writing (1), cycle index (1), capture-to-dict (2)
+- [x] Results: **74 tests, 0 failures, 0.6 seconds, 70% coverage**
+- [x] Key coverage: models 100%, settings 100%, analyze 80%, udot 86%, route 74%, export 80%
+
 ### Phase 10: Deploy + Test (NEXT)
 
 - [ ] `poe deploy` -- build Vue + cdk deploy
@@ -166,6 +180,7 @@
 | 7 | Vue Frontend -- Data + Components | DONE |
 | 8 | CDK Infrastructure | DONE |
 | 9 | LocalStack Integration | DONE |
+| -- | Test Suite | DONE |
 | 10 | Deploy + Test | Next |
 
 ---
@@ -213,3 +228,8 @@
   - Full round-trip: camera, capture, cycle, image save/retrieve
   - S3 JSON export: cycle files, latest.json, index.json all verified
   - Updated .env.example with LocalStack instructions
+- Built comprehensive test suite:
+  - 6 test files, 74 tests, 0 failures, 70% coverage
+  - Covers: analyze, route, models, storage, udot, export
+  - Uses pytest, responses (HTTP mocking), tmp_path fixtures
+  - `poe test` and `poe test:cov` tasks added
