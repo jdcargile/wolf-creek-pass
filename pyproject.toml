@@ -33,8 +33,10 @@ dev = { cmd = "npm run dev", cwd = "frontend", help = "Start Vue dev server (Vit
 build = { cmd = "npm run build", cwd = "frontend", help = "Build Vue for production" }
 localstack-up = { cmd = "docker compose up -d", help = "Start LocalStack" }
 localstack-down = { cmd = "docker compose down", help = "Stop LocalStack" }
+cdk-synth = { shell = "cd infra && npx aws-cdk synth", help = "Synthesize CloudFormation template" }
 cdk-deploy = { shell = "cd infra && npx aws-cdk deploy --require-approval never", help = "Deploy AWS infrastructure" }
 cdk-diff = { shell = "cd infra && npx aws-cdk diff", help = "Preview infrastructure changes" }
+deploy = { shell = "cd frontend && npm run build && cd ../infra && npx aws-cdk deploy --require-approval never", help = "Build Vue + deploy full stack" }
 
 [dependency-groups]
 dev = [

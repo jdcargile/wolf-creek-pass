@@ -1,0 +1,23 @@
+# Frontend
+frontend/
+node_modules/
+
+# Infrastructure
+infra/
+cdk.out/
+
+# Dev artifacts
+.env
+.env.*
+*.db
+*.sqlite
+__pycache__/
+*.pyc
+.venv/
+.git/
+output/
+images/
+
+# Docs
+*.md
+LICENSE

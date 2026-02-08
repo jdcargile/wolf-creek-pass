@@ -158,8 +158,8 @@ def run_capture_cycle(settings: Settings) -> None:
     storage.save_cycle(cycle)
 
     # 6. Export JSON for Vue
-    export_cycle_to_file(storage, cycle, route)
-    export_cycle_index(storage)
+    export_cycle_to_file(storage, cycle, route, settings)
+    export_cycle_index(storage, settings)
 
     console.rule(
         f"[bold blue]Cycle complete -- {len(cameras)} cameras, "

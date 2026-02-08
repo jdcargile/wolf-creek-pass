@@ -3,7 +3,7 @@
 > See PLAN.md for the full implementation plan.
 > This file tracks what's been done, what's in progress, and what's next.
 
-## Status: Phases 1-7 COMPLETE -- Ready for Phase 8 (CDK Infrastructure)
+## Status: Phases 1-8 COMPLETE -- Ready for Phase 9 (LocalStack Integration)
 
 ### Phase 1: Project Scaffolding (DONE)
 
@@ -98,13 +98,40 @@
 - [x] `vue-tsc --noEmit` passes (zero type errors)
 - [x] `npm run build` passes (production build: ~117KB app JS + ~149KB Leaflet)
 
-### Phase 8: CDK Infrastructure (NEXT)
+### Phase 8: CDK Infrastructure (DONE)
 
-- [ ] Dockerfile for Lambda
-- [ ] Verify `cdk synth`
-- [ ] Test `cdk diff`
+- [x] `handler.py` -- Lambda entry point
+  - Reads API keys from SSM Parameter Store at runtime
+  - Sets env vars so `Settings` picks them up via pydantic-settings
+  - Calls `run_capture_cycle(settings)` for a single cycle
+- [x] `Dockerfile` -- Lambda container image
+  - Based on `public.ecr.aws/lambda/python:3.12`
+  - Installs all Python deps, copies application code
+  - Handler: `handler.lambda_handler`
+- [x] `.dockerignore` -- excludes frontend, infra, dev artifacts
+- [x] `export.py` updated -- writes JSON to S3 when `STORAGE_BACKEND=dynamo`
+  - `_write_json()` helper: local filesystem (sqlite) or S3 `data/` prefix (dynamo)
+  - `export_cycle_to_file()` and `export_cycle_index()` now accept `settings` param
+- [x] `traffic_cam_monitor.py` updated -- passes `settings` to export functions
+- [x] CDK stack (`infra/infra/infra_stack.py`) updated:
+  - Lambda gets SSM read permissions for all 3 API key params
+  - S3 BucketDeployment for Vue frontend (`frontend/dist/` -> S3 root)
+  - `prune=False` so data/ and images/ aren't deleted on redeploy
+  - SPA error fallback (`index.html` for both index and error doc)
+  - CfnOutputs: WebsiteUrl, BucketName, TableName
+- [x] `cdk.json` updated -- uses `uv run --group dev` to invoke CDK app
+- [x] `pyproject.toml` -- added `cdk-synth` and `deploy` poe tasks
+- [x] `cdk synth` passes -- full CloudFormation template verified
 
-### Phase 9-10: See PLAN.md
+### Phase 9: LocalStack Integration (NEXT)
+
+- [ ] Verify `docker compose up -d` starts LocalStack
+- [ ] Run `poe monitor:once` with `STORAGE_BACKEND=dynamo` + `AWS_ENDPOINT_URL=http://localhost:4566`
+- [ ] Verify DynamoDB table + S3 bucket auto-created
+- [ ] Verify JSON exported to S3
+- [ ] Verify Vue dev server can fetch data
+
+### Phase 10: See PLAN.md
 
 ---
 
@@ -119,8 +146,8 @@
 | 5 | Refactor Monitor (route-aware orchestrator) | DONE |
 | 6 | Vue Frontend -- Layout + Map | DONE |
 | 7 | Vue Frontend -- Data + Components | DONE |
-| 8 | CDK Infrastructure | Next |
-| 9 | LocalStack Integration | Not Started |
+| 8 | CDK Infrastructure | DONE |
+| 9 | LocalStack Integration | Next |
 | 10 | Deploy + Test | Not Started |
 
 ---
@@ -153,3 +180,12 @@
   - Fixed RouteMap.vue TypeScript error (computed type assertion)
 - Fixed npm rollup-darwin-arm64 issue (force installed native module)
 - Verified: vue-tsc passes, npm run build passes
+- Completed Phase 8 CDK infrastructure:
+  - Created handler.py (Lambda entry point, SSM param reading)
+  - Created Dockerfile (Lambda container, Python 3.12)
+  - Created .dockerignore
+  - Updated export.py for S3 output support
+  - Updated CDK stack: SSM perms, S3 BucketDeployment, CfnOutputs
+  - Updated cdk.json for uv-based invocation
+  - Added poe tasks: cdk-synth, deploy
+  - Verified cdk synth passes clean

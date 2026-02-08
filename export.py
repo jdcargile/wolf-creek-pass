@@ -2,7 +2,7 @@
 Export capture cycle data as JSON for the Vue frontend.
 
 Generates per-cycle JSON files and an index of all cycles.
-Files are saved locally or uploaded to S3 depending on storage backend.
+Outputs to local filesystem (dev) or S3 (deployed), controlled by settings.
 """
 
 from __future__ import annotations
@@ -10,21 +10,47 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import boto3
 from rich.console import Console
 
-from models import (
-    CaptureRecord,
-    CycleSummary,
-    Event,
-    RoadCondition,
-    Route,
-    WeatherStation,
-)
+from models import CaptureRecord, CycleSummary, Route
+from settings import Settings
 from storage import Storage
 
 console = Console()
 
 OUTPUT_DIR = Path("output/data")
+
+
+def _get_s3_client(settings: Settings):
+    """Create an S3 client if using dynamo backend."""
+    kwargs = {}
+    if settings.aws_endpoint_url:
+        kwargs["endpoint_url"] = settings.aws_endpoint_url
+    return boto3.client("s3", region_name=settings.aws_default_region, **kwargs)
+
+
+def _write_json(key: str, data: dict, settings: Settings) -> str:
+    """Write JSON to local filesystem or S3 depending on backend."""
+    payload = json.dumps(data, indent=2, default=str)
+
+    if settings.storage_backend == "dynamo":
+        s3 = _get_s3_client(settings)
+        s3_key = f"data/{key}"
+        s3.put_object(
+            Bucket=settings.bucket_name,
+            Key=s3_key,
+            Body=payload.encode(),
+            ContentType="application/json",
+        )
+        console.print(f"Exported [dim]s3://{settings.bucket_name}/{s3_key}[/dim]")
+        return f"s3://{settings.bucket_name}/{s3_key}"
+    else:
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        path = OUTPUT_DIR / key
+        path.write_text(payload)
+        console.print(f"Exported [dim]{path}[/dim]")
+        return str(path)
 
 
 def export_cycle_json(
@@ -38,7 +64,7 @@ def export_cycle_json(
     events = storage.get_events(cycle.cycle_id)
     weather = storage.get_weather(cycle.cycle_id)
 
-    data = {
+    return {
         "cycle": cycle.model_dump(),
         "route": route.model_dump() if route else None,
         "captures": [_capture_to_dict(c, storage) for c in captures],
@@ -47,49 +73,46 @@ def export_cycle_json(
         "weather": [w.model_dump() for w in weather],
     }
 
-    return data
-
 
 def export_cycle_to_file(
     storage: Storage,
     cycle: CycleSummary,
     route: Route | None = None,
-) -> Path:
-    """Export a cycle's data to a local JSON file."""
-    data = export_cycle_json(storage, cycle, route)
+    settings: Settings | None = None,
+) -> str:
+    """Export a cycle's data to a JSON file (local or S3)."""
+    if settings is None:
+        settings = Settings()
 
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    data = export_cycle_json(storage, cycle, route)
 
     # Per-cycle file
     safe_id = cycle.cycle_id.replace(":", "-")
-    cycle_path = OUTPUT_DIR / f"cycle-{safe_id}.json"
-    cycle_path.write_text(json.dumps(data, indent=2, default=str))
+    _write_json(f"cycle-{safe_id}.json", data, settings)
 
-    # Latest symlink / copy
-    latest_path = OUTPUT_DIR / "latest.json"
-    latest_path.write_text(json.dumps(data, indent=2, default=str))
+    # Latest
+    _write_json("latest.json", data, settings)
 
-    console.print(f"Exported cycle data to [dim]{cycle_path}[/dim]")
-    return cycle_path
+    return f"cycle-{safe_id}.json"
 
 
-def export_cycle_index(storage: Storage) -> Path:
+def export_cycle_index(
+    storage: Storage,
+    settings: Settings | None = None,
+) -> str:
     """Export an index of all capture cycles."""
-    cycles = storage.get_cycles(limit=200)
+    if settings is None:
+        settings = Settings()
 
+    cycles = storage.get_cycles(limit=200)
     index = {
         "cycles": [c.model_dump() for c in cycles],
         "count": len(cycles),
     }
 
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    index_path = OUTPUT_DIR / "index.json"
-    index_path.write_text(json.dumps(index, indent=2, default=str))
-
-    console.print(
-        f"Exported cycle index ({len(cycles)} cycles) to [dim]{index_path}[/dim]"
-    )
-    return index_path
+    _write_json("index.json", index, settings)
+    console.print(f"Exported cycle index ({len(cycles)} cycles)")
+    return "index.json"
 
 
 def _capture_to_dict(capture: CaptureRecord, storage: Storage) -> dict:
