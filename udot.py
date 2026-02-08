@@ -91,12 +91,12 @@ def fetch_road_conditions(api_key: str) -> list[RoadCondition]:
     return [
         RoadCondition(
             id=item.get("Id", 0),
-            roadway_name=item.get("RoadwayName", ""),
-            road_condition=item.get("RoadCondition", ""),
-            weather_condition=item.get("WeatherCondition", ""),
-            restriction=item.get("Restriction", ""),
-            encoded_polyline=item.get("EncodedPolyline", ""),
-            last_updated=item.get("LastUpdated", 0),
+            roadway_name=item.get("RoadwayName") or "",
+            road_condition=item.get("RoadCondition") or "",
+            weather_condition=item.get("WeatherCondition") or "",
+            restriction=item.get("Restriction") or "",
+            encoded_polyline=item.get("EncodedPolyline") or "",
+            last_updated=item.get("LastUpdated") or 0,
         )
         for item in raw
     ]
@@ -125,12 +125,12 @@ def fetch_events(api_key: str) -> list[Event]:
     return [
         Event(
             id=str(item.get("ID", "")),
-            event_type=item.get("EventType", ""),
-            event_sub_type=item.get("EventSubType", ""),
-            roadway_name=item.get("RoadwayName", ""),
-            direction=item.get("DirectionOfTravel", ""),
-            description=item.get("Description", ""),
-            severity=item.get("Severity", ""),
+            event_type=item.get("EventType") or "",
+            event_sub_type=item.get("EventSubType") or "",
+            roadway_name=item.get("RoadwayName") or "",
+            direction=item.get("DirectionOfTravel") or "",
+            description=item.get("Description") or "",
+            severity=item.get("Severity") or "",
             latitude=item.get("Latitude"),
             longitude=item.get("Longitude"),
             is_full_closure=bool(item.get("IsFullClosure", False)),
@@ -166,15 +166,15 @@ def fetch_weather_stations(api_key: str) -> list[WeatherStation]:
     return [
         WeatherStation(
             id=item.get("Id", 0),
-            station_name=item.get("StationName", ""),
-            air_temperature=item.get("AirTemperature", ""),
-            surface_temp=item.get("SurfaceTemp", ""),
-            surface_status=item.get("SurfaceStatus", ""),
-            wind_speed_avg=item.get("WindSpeedAvg", ""),
-            wind_speed_gust=item.get("WindSpeedGust", ""),
-            wind_direction=item.get("WindDirection", ""),
-            precipitation=item.get("Precipitation", ""),
-            relative_humidity=item.get("RelativeHumidity", ""),
+            station_name=item.get("StationName") or "",
+            air_temperature=item.get("AirTemperature") or "",
+            surface_temp=item.get("SurfaceTemp") or "",
+            surface_status=item.get("SurfaceStatus") or "",
+            wind_speed_avg=item.get("WindSpeedAvg") or "",
+            wind_speed_gust=item.get("WindSpeedGust") or "",
+            wind_direction=item.get("WindDirection") or "",
+            precipitation=item.get("Precipitation") or "",
+            relative_humidity=item.get("RelativeHumidity") or "",
         )
         for item in raw
     ]
