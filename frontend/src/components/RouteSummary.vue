@@ -20,7 +20,7 @@ const store = useCycleStore()
       <span class="stat-value">{{ store.wolfCreekPass.air_temperature }}&deg;</span>
       <span class="stat-label">pass temp</span>
     </div>
-    <div class="stat" v-if="store.primaryRoute">
+    <div class="stat" v-if="store.selectedRoute">
       <span class="stat-value">{{ store.distanceMiles }}</span>
       <span class="stat-label">miles</span>
     </div>

@@ -9,7 +9,11 @@ from pydantic_settings import BaseSettings
 
 
 # ---------------------------------------------------------------------------
-# Route definitions -- 3 named routes from Riverton to Hanna
+# Route definitions -- named routes from Riverton to Hanna
+# ---------------------------------------------------------------------------
+# Waypoints use coordinates on SR-35 (Wolf Creek Pass cameras) to force
+# Google Directions through the correct mountain pass rather than letting
+# it wander onto forest roads or other highways.
 # ---------------------------------------------------------------------------
 
 
@@ -25,109 +29,31 @@ class RouteConfig:
 
 
 ROUTES: list[RouteConfig] = [
-    # ── 1. PRIMARY: Parley's → Kamas → Francis → Wolf Creek Pass ──────
-    # JD's preferred commute. I-15 → I-215 → I-80 (Parley's Canyon) →
-    # SR-248 to Kamas → SR-32 south through Francis → SR-35 east over
-    # Wolf Creek Pass → US-40 to Hanna.
+    # ── PRIMARY: Parley's Canyon → SR-35 Wolf Creek Pass ──────────────
+    # I-15 N → I-215 E → I-80 E (Parley's Canyon) → SR-248 to Kamas →
+    # SR-32 S to Francis → SR-35 E over Wolf Creek Pass → US-40 to Hanna.
+    # ~112 min, ~94 mi per Google Directions.
+    #
+    # Waypoints use UDOT camera coordinates ON SR-35 to force the route
+    # through Wolf Creek Pass (city-name waypoints like "Kamas, UT" let
+    # Google shortcut via UT-150 / forest roads).
     RouteConfig(
         route_id="parleys-wolfcreek",
         name="Parley's / Wolf Creek",
-        waypoints=["Kamas, UT", "Francis, UT"],
+        waypoints=[
+            "via:40.558,-111.131",  # SR-35 RWIS @ Wolf Creek / MP 9.92
+            "via:40.4872,-111.0344",  # SR-35 RWIS EB @ Wolf Creek Pass / MP 19.33
+        ],
         color="#3b82f6",  # blue
         camera_ids=[
-            # I-215 East (Riverton → I-80)
-            91683,  # I-215 S WB @ Union Park Ave
-            91581,  # I-215 E NB @ 6400 S
-            91614,  # I-215 E NB @ Parleys Canyon / 2900 S
-            # I-80 Parley's Canyon (SLC → Park City)
+            # I-80 Parley's Canyon (SLC → Park City) -- key corridor cameras
             91604,  # I-80 EB @ Mouth of Parley's Canyon
-            91619,  # I-80 EB @ Chain Up Area East
             91746,  # I-80 EB @ MP 132.97
-            91642,  # I-80 EB @ East Canyon / SR-65
             90912,  # I-80 EB @ Parley's Summit
-            91410,  # I-80 EB @ Parley's Canyon / MP 138
-            91425,  # I-80 EB @ Summit Park
-            91761,  # I-80 EB @ View Area
             91736,  # I-80 EB @ West of US-40 junction
             # SR-35 Wolf Creek Pass -- the money cameras
             90544,  # SR-35 RWIS @ Wolf Creek / MP 9.92
             90779,  # SR-35 RWIS EB @ Wolf Creek Pass / MP 19.33
-            # US-40 east of Wolf Creek → Duchesne → Hanna
-            90043,  # US-40 @ WA/DU County Line
-            90661,  # US-40 @ MP 69.81
-            89190,  # US-40 @ 100 W / US-191, Duchesne
-        ],
-    ),
-    # ── 2. SECONDARY: Provo Canyon → Kamas → Wolf Creek Pass ──────────
-    # US-189 through Provo Canyon → Heber → SR-32 north through Francis
-    # to Kamas → SR-35 east over Wolf Creek Pass → US-40 to Hanna.
-    RouteConfig(
-        route_id="provo-wolfcreek",
-        name="Provo Canyon / Wolf Creek",
-        waypoints=["Provo Canyon, UT", "Heber City, UT", "Kamas, UT"],
-        color="#8b5cf6",  # purple
-        camera_ids=[
-            # US-189 Provo Canyon
-            90363,  # US-189 @ Mouth of Provo Canyon
-            87874,  # US-189 @ Springdell
-            90727,  # US-189 @ Canyon Glen Park
-            90626,  # US-189 @ Fishermen's
-            90728,  # US-189 @ Lower Deer Creek Rd
-            90275,  # US-189 @ Deer Creek Dam
-            # US-40 Heber area (brief segment before SR-32)
-            90389,  # US-40 @ US-189 / 1200 S, Heber
-            90353,  # US-40 @ 100 S, Heber
-            91773,  # US-40 @ Coyote Canyon Pkwy, Heber
-            # SR-35 Wolf Creek Pass (shared with primary)
-            90544,  # SR-35 RWIS @ Wolf Creek / MP 9.92
-            90779,  # SR-35 RWIS EB @ Wolf Creek Pass / MP 19.33
-            # US-40 east of Wolf Creek → Duchesne → Hanna (shared)
-            90043,  # US-40 @ WA/DU County Line
-            90661,  # US-40 @ MP 69.81
-            89190,  # US-40 @ 100 W / US-191, Duchesne
-        ],
-    ),
-    # ── 3. TERTIARY: US-40 through Tabiona (Wolf Creek closed) ────────
-    # When SR-35 is closed. I-215 → I-80 → US-40 → Heber → Daniels
-    # Summit → Strawberry Reservoir → Duchesne → north to Tabiona → Hanna.
-    # Bypasses Wolf Creek Pass entirely, stays on US-40.
-    RouteConfig(
-        route_id="us40-tabiona",
-        name="US-40 / Tabiona",
-        waypoints=["Duchesne, UT", "Tabiona, UT"],
-        color="#f97316",  # orange
-        camera_ids=[
-            # I-215 East (shared with primary)
-            91683,  # I-215 S WB @ Union Park Ave
-            91581,  # I-215 E NB @ 6400 S
-            91614,  # I-215 E NB @ Parleys Canyon / 2900 S
-            # I-80 Parley's Canyon (shared with primary)
-            91604,  # I-80 EB @ Mouth of Parley's Canyon
-            91619,  # I-80 EB @ Chain Up Area East
-            91746,  # I-80 EB @ MP 132.97
-            91642,  # I-80 EB @ East Canyon / SR-65
-            90912,  # I-80 EB @ Parley's Summit
-            91410,  # I-80 EB @ Parley's Canyon / MP 138
-            91425,  # I-80 EB @ Summit Park
-            91761,  # I-80 EB @ View Area
-            91736,  # I-80 EB @ West of US-40 junction
-            # US-40 Heber → Daniels Summit
-            90389,  # US-40 @ US-189 / 1200 S, Heber
-            90353,  # US-40 @ 100 S, Heber
-            91773,  # US-40 @ Coyote Canyon Pkwy, Heber
-            87716,  # US-40 @ Deer Hollow Rd
-            90593,  # US-40 @ MP 27.53
-            92985,  # US-40 SB @ Lodge Pole / MP 33.43
-            90307,  # US-40 @ Daniels Summit
-            # US-40 Strawberry Reservoir
-            90207,  # US-40 @ Strawberry Rd
-            88216,  # US-40 @ Strawberry Reservoir
-            90980,  # US-40 @ Strawberry Reservoir Ladders
-            90465,  # US-40 @ MP 49.14
-            # US-40 Duchesne area
-            90043,  # US-40 @ WA/DU County Line
-            90661,  # US-40 @ MP 69.81
-            89190,  # US-40 @ 100 W / US-191, Duchesne
         ],
     ),
 ]

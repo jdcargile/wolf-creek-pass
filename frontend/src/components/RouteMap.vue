@@ -56,12 +56,24 @@ const decodedRoutes = computed<DecodedRoute[]>(() => {
     .map((r) => ({ route: r, points: decodePolyline(r.polyline) }))
 })
 
-// Map center (middle of primary route or default Utah)
+// Selected route rendered last (on top); non-selected first (underneath)
+const sortedRoutes = computed<DecodedRoute[]>(() => {
+  const selected = store.selectedRouteId
+  return [...decodedRoutes.value].sort((a, b) => {
+    const aSelected = a.route.route_id === selected ? 1 : 0
+    const bSelected = b.route.route_id === selected ? 1 : 0
+    return aSelected - bSelected
+  })
+})
+
+// Map center (middle of selected route or default Utah)
 const center = computed(() => {
-  const primary = decodedRoutes.value[0]
-  if (primary && primary.points.length > 0) {
-    const mid = Math.floor(primary.points.length / 2)
-    return primary.points[mid] as [number, number]
+  const selected = decodedRoutes.value.find(
+    (dr) => dr.route.route_id === store.selectedRouteId,
+  ) ?? decodedRoutes.value[0]
+  if (selected && selected.points.length > 0) {
+    const mid = Math.floor(selected.points.length / 2)
+    return selected.points[mid] as [number, number]
   }
   return [40.45, -111.3] as [number, number]
 })
@@ -133,15 +145,15 @@ function formatDistance(meters: number): string {
         attribution="&copy; OpenStreetMap contributors"
       />
 
-      <!-- Route polylines (render alternate routes first, primary on top) -->
+      <!-- Route polylines (selected route rendered last / on top) -->
       <LPolyline
-        v-for="(dr, i) in [...decodedRoutes].reverse()"
+        v-for="dr in sortedRoutes"
         :key="`route-${dr.route.route_id}`"
         :lat-lngs="dr.points"
         :color="dr.route.color"
-        :weight="i === decodedRoutes.length - 1 ? 5 : 3"
-        :opacity="i === decodedRoutes.length - 1 ? 0.9 : 0.5"
-        :dash-array="i === decodedRoutes.length - 1 ? undefined : '8 6'"
+        :weight="dr.route.route_id === store.selectedRouteId ? 5 : 3"
+        :opacity="dr.route.route_id === store.selectedRouteId ? 0.9 : 0.35"
+        :dash-array="dr.route.route_id === store.selectedRouteId ? undefined : '8 6'"
       >
         <LPopup>
           <div class="popup">
@@ -273,6 +285,8 @@ function formatDistance(meters: number): string {
         v-for="r in store.routes"
         :key="r.route_id"
         class="legend-item"
+        :class="{ 'legend-item--selected': r.route_id === store.selectedRouteId }"
+        @click="store.selectRoute(r.route_id)"
       >
         <span class="legend-swatch" :style="{ backgroundColor: r.color }"></span>
         <span class="legend-label">{{ r.name }}</span>
@@ -387,6 +401,19 @@ function formatDistance(meters: number): string {
   display: flex;
   align-items: center;
   gap: 0.4rem;
+  cursor: pointer;
+  padding: 0.15rem 0.3rem;
+  border-radius: 4px;
+  transition: background-color 0.15s;
+}
+
+.legend-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.legend-item--selected {
+  background: rgba(0, 0, 0, 0.08);
+  font-weight: 600;
 }
 
 .legend-swatch {

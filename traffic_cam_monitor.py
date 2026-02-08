@@ -27,7 +27,7 @@ from analyze import analyze_image_bytes
 from export import export_cycle_index, export_cycle_to_file
 from models import CaptureRecord, CycleSummary
 from route import get_routes
-from settings import ROUTES, Settings, get_all_camera_ids
+from settings import Settings, get_all_camera_ids
 from storage import create_storage
 from udot import (
     fetch_all_cameras,
@@ -42,28 +42,6 @@ from udot import (
 console = Console()
 
 
-def _build_camera_ids(wolf_creek_closed: bool) -> list[int]:
-    """Build the list of camera IDs to process.
-
-    When Wolf Creek Pass is OPEN, skip the US-40/Tabiona bypass cameras.
-    When CLOSED, include all 3 routes.
-    """
-    if wolf_creek_closed:
-        return get_all_camera_ids()
-
-    # Only routes 1 and 2 (exclude us40-tabiona)
-    seen: set[int] = set()
-    result: list[int] = []
-    for route_cfg in ROUTES:
-        if route_cfg.route_id == "us40-tabiona":
-            continue
-        for cid in route_cfg.camera_ids:
-            if cid not in seen:
-                seen.add(cid)
-                result.append(cid)
-    return result
-
-
 def run_capture_cycle(settings: Settings) -> None:
     """Run one complete capture cycle."""
     storage = create_storage(settings)
@@ -74,23 +52,13 @@ def run_capture_cycle(settings: Settings) -> None:
 
     console.rule(f"[bold blue]Capture cycle {cycle_id}[/bold blue]")
 
-    # 1. Check Wolf Creek Pass closure status
-    wolf_creek_closed = False
+    # 1. Check Wolf Creek Pass closure status (informational)
     try:
-        wolf_creek_closed = is_wolf_creek_closed(settings.udot_api_key)
+        is_wolf_creek_closed(settings.udot_api_key)
     except Exception as e:
         console.print(f"[yellow]Wolf Creek status check failed:[/yellow] {e}")
 
-    if wolf_creek_closed:
-        console.print(
-            "[red bold]Wolf Creek CLOSED -- including US-40/Tabiona bypass cameras[/red bold]"
-        )
-    else:
-        console.print(
-            "[green]Wolf Creek OPEN -- skipping US-40/Tabiona bypass cameras[/green]"
-        )
-
-    # 2. Get all 3 routes
+    # 2. Get route(s) from Google Directions API
     routes = []
     if settings.google_maps_api_key:
         try:
@@ -107,8 +75,8 @@ def run_capture_cycle(settings: Settings) -> None:
 
     primary_route = routes[0] if routes else None
 
-    # 3. Fetch cameras (conditional on Wolf Creek closure)
-    camera_ids = _build_camera_ids(wolf_creek_closed)
+    # 3. Fetch cameras for all configured routes
+    camera_ids = get_all_camera_ids()
     all_cameras = fetch_all_cameras(settings.udot_api_key)
     camera_lookup = {c.Id: c for c in all_cameras}
     cameras = [camera_lookup[cid] for cid in camera_ids if cid in camera_lookup]

@@ -2,6 +2,7 @@
 import { onMounted } from 'vue'
 import { useCycleStore } from '@/stores/cycle'
 import RouteSummary from '@/components/RouteSummary.vue'
+import RouteSelector from '@/components/RouteSelector.vue'
 import CycleSelector from '@/components/CycleSelector.vue'
 import RouteMap from '@/components/RouteMap.vue'
 import CameraCard from '@/components/CameraCard.vue'
@@ -19,10 +20,13 @@ onMounted(async () => {
     <header class="dashboard-header">
       <div class="header-top">
         <h1>Wolf Creek Pass</h1>
-        <CycleSelector v-if="store.allCycles.length > 0" />
+        <div class="header-controls">
+          <RouteSelector />
+          <CycleSelector v-if="store.allCycles.length > 0" />
+        </div>
       </div>
-      <p class="subtitle" v-if="store.primaryRoute">
-        {{ store.primaryRoute.origin }} &rarr; {{ store.primaryRoute.destination }}
+      <p class="subtitle" v-if="store.selectedRoute">
+        {{ store.selectedRoute.origin }} &rarr; {{ store.selectedRoute.destination }}
       </p>
     </header>
 
@@ -195,6 +199,13 @@ onMounted(async () => {
   align-items: center;
   flex-wrap: wrap;
   gap: 0.75rem;
+}
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
 h1 {
