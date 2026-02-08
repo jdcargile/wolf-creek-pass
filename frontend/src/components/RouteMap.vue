@@ -1,13 +1,25 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { LMap, LTileLayer, LPolyline, LMarker, LPopup, LCircleMarker } from '@vue-leaflet/vue-leaflet'
+import * as L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useCycleStore } from '@/stores/cycle'
-import type { CaptureRecord, Event as TrafficEvent, MountainPass, SnowPlow, Route } from '@/types'
+import type { CaptureRecord, MountainPass, Route } from '@/types'
 
 const store = useCycleStore()
 
-// Decode Google encoded polyline
+// --- Emoji marker icon factory ---
+function emojiIcon(emoji: string, size: number = 28): L.DivIcon {
+  return L.divIcon({
+    html: `<span style="font-size:${size}px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.3))">${emoji}</span>`,
+    className: 'emoji-marker',
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -size / 2],
+  })
+}
+
+// --- Polyline decoding ---
 function decodePolyline(encoded: string): [number, number][] {
   const points: [number, number][] = []
   let index = 0
@@ -44,7 +56,8 @@ function decodePolyline(encoded: string): [number, number][] {
   return points
 }
 
-// Decoded polylines for all routes
+// --- Computed data ---
+
 interface DecodedRoute {
   route: Route
   points: [number, number][]
@@ -56,7 +69,6 @@ const decodedRoutes = computed<DecodedRoute[]>(() => {
     .map((r) => ({ route: r, points: decodePolyline(r.polyline) }))
 })
 
-// Selected route rendered last (on top); non-selected first (underneath)
 const sortedRoutes = computed<DecodedRoute[]>(() => {
   const selected = store.selectedRouteId
   return [...decodedRoutes.value].sort((a, b) => {
@@ -66,7 +78,6 @@ const sortedRoutes = computed<DecodedRoute[]>(() => {
   })
 })
 
-// Map center (middle of selected route or default Utah)
 const center = computed(() => {
   const selected = decodedRoutes.value.find(
     (dr) => dr.route.route_id === store.selectedRouteId,
@@ -78,7 +89,6 @@ const center = computed(() => {
   return [40.45, -111.3] as [number, number]
 })
 
-// Camera markers
 const cameraMarkers = computed(() => {
   if (!store.currentCycle?.captures) return []
   return store.currentCycle.captures.filter(
@@ -86,20 +96,10 @@ const cameraMarkers = computed(() => {
   )
 })
 
-// Event markers
-const eventMarkers = computed(() => {
-  if (!store.currentCycle?.events) return []
-  return store.currentCycle.events.filter(
-    (e) => e.latitude != null && e.longitude != null,
-  )
-})
-
-// Mountain pass markers
 const passMarkers = computed(() => {
   return store.passes.filter((p) => p.latitude != null && p.longitude != null)
 })
 
-// Snow plow markers
 const plowMarkers = computed(() => {
   if (!store.currentCycle?.plows) return []
   return store.currentCycle.plows.filter(
@@ -107,23 +107,18 @@ const plowMarkers = computed(() => {
   )
 })
 
-function cameraColor(capture: CaptureRecord): string {
-  if (capture.has_snow) return '#dc2626'
-  if (capture.has_animal) return '#ca8a04'
-  return '#16a34a'
+// --- Icon getters ---
+function cameraIcon(capture: CaptureRecord): L.DivIcon {
+  if (capture.has_snow) return emojiIcon('🥶', 26)
+  if (capture.has_animal) return emojiIcon('🦌', 26)
+  return emojiIcon('📷', 24)
 }
 
-function eventColor(event: TrafficEvent): string {
-  if (event.is_full_closure) return '#dc2626'
-  if (event.event_type === 'accidentsAndIncidents') return '#ea580c'
-  return '#f59e0b'
-}
-
-function passColor(p: MountainPass): string {
-  if (p.closure_status?.toUpperCase() === 'CLOSED') return '#dc2626'
+function passIcon(p: MountainPass): L.DivIcon {
+  if (p.closure_status?.toUpperCase() === 'CLOSED') return emojiIcon('🚫', 28)
   const temp = parseInt(p.air_temperature)
-  if (!isNaN(temp) && temp <= 32) return '#3b82f6' // freezing = blue
-  return '#6b7280' // gray
+  if (!isNaN(temp) && temp <= 32) return emojiIcon('🥶', 28)
+  return emojiIcon('⛰️', 28)
 }
 
 function formatDuration(seconds: number): string {
@@ -145,7 +140,7 @@ function formatDistance(meters: number): string {
         attribution="&copy; OpenStreetMap contributors"
       />
 
-      <!-- Route polylines (selected route rendered last / on top) -->
+      <!-- Route polylines -->
       <LPolyline
         v-for="dr in sortedRoutes"
         :key="`route-${dr.route.route_id}`"
@@ -159,92 +154,81 @@ function formatDistance(meters: number): string {
           <div class="popup">
             <strong>{{ dr.route.name }}</strong>
             <div v-if="dr.route.distance_m" class="popup-road">
-              {{ dr.route.distance_display || formatDistance(dr.route.distance_m) }} &middot;
+              {{ dr.route.distance_display || formatDistance(dr.route.distance_m) }} ·
               {{ dr.route.travel_time_display || formatDuration(dr.route.duration_s) }}
             </div>
           </div>
         </LPopup>
       </LPolyline>
 
-      <!-- Mountain pass markers (diamond shape via rotated square) -->
-      <LCircleMarker
+      <!-- Mountain pass markers (emoji) -->
+      <LMarker
         v-for="p in passMarkers"
         :key="`pass-${p.id}`"
         :lat-lng="[p.latitude!, p.longitude!]"
-        :radius="10"
-        :color="passColor(p)"
-        :fill-color="'#ffffff'"
-        :fill-opacity="0.95"
-        :weight="3"
+        :icon="passIcon(p)"
       >
         <LPopup>
           <div class="popup">
-            <strong>{{ p.name }}</strong>
+            <strong>⛰️ {{ p.name }}</strong>
             <div class="popup-road">{{ p.elevation_ft }}' elev</div>
             <div v-if="p.air_temperature" class="pass-temp">
-              {{ p.air_temperature }}&deg;F
+              🌡️ {{ p.air_temperature }}°F
             </div>
             <div class="popup-badges">
-              <span v-if="p.closure_status === 'CLOSED'" class="popup-tag popup-tag--danger">CLOSED</span>
-              <span v-else-if="p.closure_status === 'OPEN'" class="popup-tag popup-tag--open">OPEN</span>
-              <span v-if="p.surface_status" class="popup-tag">{{ p.surface_status }}</span>
+              <span v-if="p.closure_status === 'CLOSED'" class="popup-tag popup-tag--danger">🚫 CLOSED</span>
+              <span v-else-if="p.closure_status === 'OPEN'" class="popup-tag popup-tag--open">🟢 OPEN</span>
+              <span v-if="p.surface_status" class="popup-tag">🛣️ {{ p.surface_status }}</span>
             </div>
             <div v-if="p.wind_speed" class="popup-notes">
-              Wind: {{ p.wind_speed }} mph {{ p.wind_direction }}
+              💨 {{ p.wind_speed }} mph {{ p.wind_direction }}
               <span v-if="p.wind_gust">(gusts {{ p.wind_gust }})</span>
             </div>
             <div v-if="p.visibility" class="popup-notes">
-              Visibility: {{ p.visibility }}
+              👁️ Visibility: {{ p.visibility }}
             </div>
           </div>
         </LPopup>
-      </LCircleMarker>
+      </LMarker>
 
-      <!-- Snow plow markers (yellow/orange triangles) -->
-      <LCircleMarker
+      <!-- Snow plow markers (emoji) -->
+      <LMarker
         v-for="plow in plowMarkers"
         :key="`plow-${plow.id}`"
         :lat-lng="[plow.latitude!, plow.longitude!]"
-        :radius="7"
-        :color="'#d97706'"
-        :fill-color="'#fbbf24'"
-        :fill-opacity="0.9"
-        :weight="2"
+        :icon="emojiIcon('🚜', 24)"
       >
         <LPopup>
           <div class="popup">
-            <strong>Snow Plow</strong>
+            <strong>🚜 Snow Plow</strong>
             <div class="popup-road">{{ plow.name }}</div>
             <div v-if="plow.speed != null" class="popup-notes">
-              Speed: {{ plow.speed }} mph
+              🏎️ {{ plow.speed }} mph
             </div>
             <div v-if="plow.last_updated" class="popup-notes">
-              Updated: {{ plow.last_updated }}
+              🕐 {{ plow.last_updated }}
             </div>
           </div>
         </LPopup>
-      </LCircleMarker>
+      </LMarker>
 
-      <!-- Camera markers -->
-      <LCircleMarker
+      <!-- Camera markers (emoji) -->
+      <LMarker
         v-for="capture in cameraMarkers"
         :key="`cam-${capture.camera_id}`"
         :lat-lng="[capture.latitude!, capture.longitude!]"
-        :radius="8"
-        :color="cameraColor(capture)"
-        :fill-color="cameraColor(capture)"
-        :fill-opacity="0.8"
+        :icon="cameraIcon(capture)"
       >
         <LPopup>
           <div class="popup">
-            <strong>{{ capture.location }}</strong>
+            <strong>📷 {{ capture.location }}</strong>
             <br />
             <span class="popup-road">{{ capture.roadway }} {{ capture.direction }}</span>
             <div class="popup-badges">
-              <span v-if="capture.has_snow" class="popup-tag popup-tag--danger">Snow</span>
-              <span v-if="capture.has_car" class="popup-tag">Cars</span>
-              <span v-if="capture.has_truck" class="popup-tag">Trucks</span>
-              <span v-if="capture.has_animal" class="popup-tag popup-tag--warning">Animals</span>
+              <span v-if="capture.has_snow" class="popup-tag popup-tag--danger">❄️ Snow</span>
+              <span v-if="capture.has_car" class="popup-tag">🚗 Cars</span>
+              <span v-if="capture.has_truck" class="popup-tag">🚛 Trucks</span>
+              <span v-if="capture.has_animal" class="popup-tag popup-tag--warning">🦌 Animals</span>
             </div>
             <p v-if="capture.analysis_notes" class="popup-notes">{{ capture.analysis_notes }}</p>
             <img
@@ -255,28 +239,7 @@ function formatDistance(meters: number): string {
             />
           </div>
         </LPopup>
-      </LCircleMarker>
-
-      <!-- Event markers -->
-      <LCircleMarker
-        v-for="event in eventMarkers"
-        :key="`evt-${event.id}`"
-        :lat-lng="[event.latitude!, event.longitude!]"
-        :radius="6"
-        :color="eventColor(event)"
-        :fill-color="eventColor(event)"
-        :fill-opacity="0.9"
-      >
-        <LPopup>
-          <div class="popup">
-            <strong>{{ event.event_type }}</strong>
-            <br />
-            <span class="popup-road">{{ event.roadway_name }} {{ event.direction }}</span>
-            <p class="popup-notes">{{ event.description }}</p>
-            <span v-if="event.is_full_closure" class="popup-tag popup-tag--danger">Full Closure</span>
-          </div>
-        </LPopup>
-      </LCircleMarker>
+      </LMarker>
     </LMap>
 
     <!-- Route legend -->
@@ -294,9 +257,10 @@ function formatDistance(meters: number): string {
           {{ r.travel_time_display || formatDuration(r.duration_s) }}
         </span>
       </div>
-      <div v-if="plowMarkers.length" class="legend-item">
-        <span class="legend-swatch legend-swatch--plow"></span>
-        <span class="legend-label">Plows ({{ plowMarkers.length }})</span>
+      <div class="legend-item legend-item--icons">
+        <span>📷 cam</span>
+        <span>⛰️ pass</span>
+        <span v-if="plowMarkers.length">🚜 plow</span>
       </div>
     </div>
   </div>
@@ -305,8 +269,8 @@ function formatDistance(meters: number): string {
 <style scoped>
 .map-container {
   width: 100%;
-  height: 400px;
-  border-radius: 8px;
+  height: 420px;
+  border-radius: 12px;
   overflow: hidden;
   border: 1px solid var(--color-border);
   position: relative;
@@ -314,8 +278,17 @@ function formatDistance(meters: number): string {
 
 @media (min-width: 768px) {
   .map-container {
-    height: 500px;
+    height: 520px;
   }
+}
+
+/* Remove default leaflet icon background/border for our emoji markers */
+:deep(.emoji-marker) {
+  background: none !important;
+  border: none !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .popup {
@@ -338,7 +311,7 @@ function formatDistance(meters: number): string {
 .popup-tag {
   display: inline-block;
   padding: 0.1rem 0.4rem;
-  border-radius: 3px;
+  border-radius: 4px;
   font-size: 0.65rem;
   font-weight: 600;
   background: #e5e7eb;
@@ -386,15 +359,16 @@ function formatDistance(meters: number): string {
   position: absolute;
   bottom: 0.5rem;
   left: 0.5rem;
-  background: rgba(255, 255, 255, 0.92);
-  border-radius: 6px;
-  padding: 0.4rem 0.6rem;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border-radius: 8px;
+  padding: 0.5rem 0.65rem;
   font-size: 0.75rem;
   z-index: 1000;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
 .legend-item {
@@ -416,19 +390,22 @@ function formatDistance(meters: number): string {
   font-weight: 600;
 }
 
+.legend-item--icons {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+  color: #6b7280;
+  cursor: default;
+  padding-top: 0.2rem;
+  border-top: 1px solid #e5e7eb;
+  margin-top: 0.1rem;
+}
+
 .legend-swatch {
   width: 18px;
   height: 4px;
   border-radius: 2px;
   flex-shrink: 0;
-}
-
-.legend-swatch--plow {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background-color: #fbbf24;
-  border: 2px solid #d97706;
 }
 
 .legend-label {

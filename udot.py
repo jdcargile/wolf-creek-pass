@@ -180,34 +180,14 @@ def fetch_weather_stations(api_key: str) -> list[WeatherStation]:
     ]
 
 
-def fetch_route_weather(
-    api_key: str, route: Route, buffer_km: float = 10.0
-) -> list[WeatherStation]:
-    """Fetch weather stations near the route.
+def fetch_route_weather(api_key: str, station_names: list[str]) -> list[WeatherStation]:
+    """Fetch weather stations filtered to specific station names.
 
-    Weather stations don't have lat/lng in the API, so we filter by name keywords.
+    Uses exact (case-insensitive) match against configured station names.
     """
     all_stations = fetch_weather_stations(api_key)
-    # Known stations along/near this route
-    route_keywords = {
-        "wolf creek",
-        "daniels",
-        "heber",
-        "provo canyon",
-        "strawberry",
-        "deer creek",
-        "parleys",
-        "spanish fork",
-        "us-40",
-        "sr-35",
-        "duchesne",
-        "currant creek",
-    }
-    return [
-        s
-        for s in all_stations
-        if any(kw in s.station_name.lower() for kw in route_keywords)
-    ]
+    name_set = {n.lower() for n in station_names}
+    return [s for s in all_stations if s.station_name.lower() in name_set]
 
 
 # ---- Mountain Passes ----

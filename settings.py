@@ -26,6 +26,7 @@ class RouteConfig:
     share_id: str = ""  # UDOT 511 shared route UUID
     camera_ids: list[int] = field(default_factory=list)
     pass_ids: list[int] = field(default_factory=list)
+    weather_station_names: list[str] = field(default_factory=list)
     color: str = "#3b82f6"  # Hex color for map polyline
 
 
@@ -53,6 +54,11 @@ ROUTES: list[RouteConfig] = [
             75,  # SR-248 Summit (7000')
             44,  # SR-35 Wolf Creek Pass (9488')
         ],
+        weather_station_names=[
+            "I-80 @ Parleys Summit",
+            "SR-35 @ Wolf Creek",
+            "SR-35 @ Wolf Creek Pass",
+        ],
     ),
 ]
 
@@ -78,6 +84,19 @@ def get_all_pass_ids() -> list[int]:
             if pid not in seen:
                 seen.add(pid)
                 result.append(pid)
+    return result
+
+
+def get_all_weather_station_names() -> list[str]:
+    """Union of all weather station names across all routes, deduplicated, order preserved."""
+    seen: set[str] = set()
+    result: list[str] = []
+    for route_cfg in ROUTES:
+        for name in route_cfg.weather_station_names:
+            lower = name.lower()
+            if lower not in seen:
+                seen.add(lower)
+                result.append(name)
     return result
 
 

@@ -19,21 +19,21 @@ onMounted(async () => {
     <!-- Header -->
     <header class="dashboard-header">
       <div class="header-top">
-        <h1>Wolf Creek Pass</h1>
+        <h1>🐺 Wolf Creek Pass</h1>
         <div class="header-controls">
           <RouteSelector />
           <CycleSelector v-if="store.allCycles.length > 0" />
         </div>
       </div>
       <p class="subtitle" v-if="store.selectedRoute">
-        {{ store.selectedRoute.origin }} &rarr; {{ store.selectedRoute.destination }}
+        {{ store.selectedRoute.origin }} → {{ store.selectedRoute.destination }}
       </p>
     </header>
 
     <!-- Loading / Error -->
-    <div v-if="store.loading" class="status-message">Loading...</div>
+    <div v-if="store.loading" class="status-message">⏳ Loading the goods...</div>
     <div v-else-if="store.error" class="status-message status-error">
-      {{ store.error }}
+      😵 {{ store.error }}
       <p>Run <code>poe monitor:once</code> to generate data.</p>
     </div>
 
@@ -41,14 +41,14 @@ onMounted(async () => {
     <template v-else-if="store.hasData">
       <!-- Route closure banners -->
       <div v-if="store.wolfCreekClosed" class="closure-banner">
-        Wolf Creek Pass (SR-35) is <strong>CLOSED</strong>.
+        🚫 Wolf Creek Pass (SR-35) is <strong>CLOSED</strong>.
         Showing US-40/Tabiona bypass route.
       </div>
       <div
         v-else-if="store.selectedRoute?.has_closure"
         class="closure-banner"
       >
-        Active closure reported on <strong>{{ store.selectedRoute.name }}</strong> route.
+        ⚠️ Active closure reported on <strong>{{ store.selectedRoute.name }}</strong> route.
       </div>
 
       <!-- Route summary bar -->
@@ -59,7 +59,7 @@ onMounted(async () => {
 
       <!-- Mountain pass conditions -->
       <section v-if="store.passes.length" class="passes-section">
-        <h2>Mountain Passes</h2>
+        <h2>⛰️ Mountain Passes</h2>
         <div class="passes-grid">
           <div
             v-for="p in store.passes"
@@ -77,25 +77,25 @@ onMounted(async () => {
                 class="pass-status"
                 :class="p.closure_status === 'CLOSED' ? 'pass-status--closed' : 'pass-status--open'"
               >
-                {{ p.closure_status }}
+                {{ p.closure_status === 'CLOSED' ? '🔴 CLOSED' : '🟢 OPEN' }}
               </span>
             </div>
-            <div class="pass-elev">{{ p.roadway }} &middot; {{ p.elevation_ft }}'</div>
+            <div class="pass-elev">{{ p.roadway }} · {{ p.elevation_ft }}'</div>
             <div class="pass-temp" v-if="p.air_temperature">
-              {{ p.air_temperature }}&deg;F
+              🌡️ {{ p.air_temperature }}°F
               <span v-if="p.surface_temp" class="pass-surface-temp">
-                (surface {{ p.surface_temp }}&deg;F)
+                (road {{ p.surface_temp }}°F)
               </span>
             </div>
             <div class="pass-detail" v-if="p.surface_status">
-              Surface: {{ p.surface_status }}
+              🛣️ {{ p.surface_status }}
             </div>
             <div class="pass-detail" v-if="p.wind_speed">
-              Wind: {{ p.wind_speed }} mph {{ p.wind_direction }}
+              💨 {{ p.wind_speed }} mph {{ p.wind_direction }}
               <span v-if="p.wind_gust">(gusts {{ p.wind_gust }})</span>
             </div>
             <div class="pass-detail" v-if="p.visibility">
-              Visibility: {{ p.visibility }} mi
+              👁️ {{ p.visibility }} mi visibility
             </div>
             <div v-if="p.forecasts" class="pass-forecasts">
               <div
@@ -114,9 +114,9 @@ onMounted(async () => {
         </div>
       </section>
 
-      <!-- Weather conditions -->
+      <!-- Weather stations -->
       <section v-if="store.currentCycle?.weather?.length" class="weather-section">
-        <h2>Weather Stations</h2>
+        <h2>🌤️ Weather Stations</h2>
         <div class="weather-grid">
           <div
             v-for="w in store.currentCycle.weather"
@@ -125,41 +125,24 @@ onMounted(async () => {
           >
             <div class="weather-name">{{ w.station_name }}</div>
             <div class="weather-temp" v-if="w.air_temperature">
-              {{ w.air_temperature }}&deg;F
+              {{ w.air_temperature }}°F
             </div>
             <div class="weather-detail" v-if="w.surface_status">
-              Surface: {{ w.surface_status }}
+              🛣️ {{ w.surface_status }}
             </div>
             <div class="weather-detail" v-if="w.wind_speed_avg">
-              Wind: {{ w.wind_speed_avg }} mph {{ w.wind_direction }}
+              💨 {{ w.wind_speed_avg }} mph {{ w.wind_direction }}
             </div>
             <div class="weather-detail" v-if="w.precipitation">
-              Precip: {{ w.precipitation }}
+              🌧️ {{ w.precipitation }}
             </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Road conditions -->
-      <section v-if="store.currentCycle?.conditions?.length" class="conditions-section">
-        <h2>Road Conditions</h2>
-        <div class="conditions-list">
-          <div
-            v-for="c in store.currentCycle.conditions"
-            :key="c.id"
-            class="condition-item"
-            :class="{ 'condition-item--warn': c.road_condition.toLowerCase() !== 'dry' }"
-          >
-            <span class="condition-road">{{ c.roadway_name }}</span>
-            <span class="condition-status">{{ c.road_condition }}</span>
-            <span class="condition-weather" v-if="c.weather_condition">{{ c.weather_condition }}</span>
           </div>
         </div>
       </section>
 
       <!-- Camera grid -->
       <section class="cameras-section">
-        <h2>Cameras ({{ store.currentCycle?.captures.length }})</h2>
+        <h2>📸 Cameras ({{ store.currentCycle?.captures.length }})</h2>
         <div class="camera-grid">
           <CameraCard
             v-for="capture in store.currentCycle?.captures"
@@ -168,34 +151,17 @@ onMounted(async () => {
           />
         </div>
       </section>
-
-      <!-- Events -->
-      <section v-if="store.currentCycle?.events?.length" class="events-section">
-        <h2>Traffic Events</h2>
-        <div class="events-list">
-          <div
-            v-for="event in store.currentCycle.events"
-            :key="event.id"
-            class="event-item"
-            :class="{ 'event-item--closure': event.is_full_closure }"
-          >
-            <span class="event-type">{{ event.event_type }}</span>
-            <span class="event-road">{{ event.roadway_name }} {{ event.direction }}</span>
-            <p class="event-desc">{{ event.description }}</p>
-          </div>
-        </div>
-      </section>
     </template>
 
     <!-- No data -->
     <div v-else class="status-message">
-      No data available. Run <code>poe monitor:once</code> to generate your first capture.
+      🏔️ No data yet. Run <code>poe monitor:once</code> to generate your first capture.
     </div>
 
     <!-- Footer -->
     <footer class="dashboard-footer">
       <span v-if="store.currentCycle">
-        Last updated: {{ new Date(store.currentCycle.cycle.completed_at).toLocaleString() }}
+        🕐 Last updated: {{ new Date(store.currentCycle.cycle.completed_at).toLocaleString() }}
       </span>
     </footer>
   </main>
@@ -281,15 +247,21 @@ code {
 /* Mountain passes grid */
 .passes-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 0.75rem;
 }
 
 .pass-card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 0.75rem;
+  border-radius: 12px;
+  padding: 0.85rem;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.pass-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .pass-card--closed {
@@ -341,6 +313,7 @@ code {
 .pass-temp {
   font-size: 1.25rem;
   font-weight: 700;
+  margin-top: 0.2rem;
 }
 
 .pass-surface-temp {
@@ -352,6 +325,7 @@ code {
 .pass-detail {
   font-size: 0.75rem;
   color: var(--color-text-muted);
+  margin-top: 0.1rem;
 }
 
 .pass-closure-desc {
@@ -391,15 +365,21 @@ code {
 /* Weather grid */
 .weather-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 0.75rem;
 }
 
 .weather-card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 0.75rem;
+  border-radius: 12px;
+  padding: 0.85rem;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.weather-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .weather-name {
@@ -416,80 +396,7 @@ code {
 .weather-detail {
   font-size: 0.75rem;
   color: var(--color-text-muted);
-}
-
-/* Road conditions */
-.conditions-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.condition-item {
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
-  padding: 0.5rem 0.75rem;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  font-size: 0.85rem;
-}
-
-.condition-item--warn {
-  border-color: var(--color-danger);
-  background: #fef2f2;
-}
-
-.condition-road {
-  font-weight: 600;
-  flex: 1;
-}
-
-.condition-status {
-  font-weight: 500;
-}
-
-.condition-weather {
-  color: var(--color-text-muted);
-}
-
-/* Events */
-.events-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.event-item {
-  padding: 0.75rem;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-}
-
-.event-item--closure {
-  border-color: var(--color-danger);
-  background: #fef2f2;
-}
-
-.event-type {
-  font-weight: 600;
-  font-size: 0.85rem;
-  text-transform: capitalize;
-  margin-right: 0.5rem;
-}
-
-.event-road {
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
-}
-
-.event-desc {
-  font-size: 0.8rem;
-  margin: 0.25rem 0 0;
-  color: var(--color-text-muted);
-  line-height: 1.3;
+  margin-top: 0.1rem;
 }
 
 /* Footer */

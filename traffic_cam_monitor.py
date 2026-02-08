@@ -27,7 +27,12 @@ from analyze import analyze_image_bytes
 from export import export_cycle_index, export_cycle_to_file
 from models import CaptureRecord, CycleSummary
 from route import get_routes
-from settings import Settings, get_all_camera_ids, get_all_pass_ids
+from settings import (
+    Settings,
+    get_all_camera_ids,
+    get_all_pass_ids,
+    get_all_weather_station_names,
+)
 from storage import create_storage
 from udot import (
     fetch_all_cameras,
@@ -185,12 +190,14 @@ def run_capture_cycle(settings: Settings) -> None:
         except Exception as e:
             console.print(f"[yellow]Events failed (continuing):[/yellow] {e}")
 
-        try:
-            weather = fetch_route_weather(settings.udot_api_key, primary_route)
-            storage.save_weather(cycle_id, weather)
-            console.print(f"Saved [bold]{len(weather)}[/bold] weather stations")
-        except Exception as e:
-            console.print(f"[yellow]Weather failed (continuing):[/yellow] {e}")
+    try:
+        weather = fetch_route_weather(
+            settings.udot_api_key, get_all_weather_station_names()
+        )
+        storage.save_weather(cycle_id, weather)
+        console.print(f"Saved [bold]{len(weather)}[/bold] weather stations")
+    except Exception as e:
+        console.print(f"[yellow]Weather failed (continuing):[/yellow] {e}")
 
     # 5b. Fetch mountain pass conditions (by configured IDs)
     try:

@@ -163,8 +163,7 @@ class TestFetchRouteWeather:
             ],
             status=200,
         )
-        route = Route(origin="A", destination="B")
-        stations = fetch_route_weather(FAKE_KEY, route)
+        stations = fetch_route_weather(FAKE_KEY, ["Wolf Creek Pass", "Daniels Summit"])
         names = [s.station_name for s in stations]
         assert "Wolf Creek Pass" in names
         assert "Daniels Summit" in names

@@ -12,37 +12,33 @@ const store = useCycleStore()
         class="stat-value stat-badge"
         :class="store.wolfCreekClosed ? 'stat-badge--closed' : 'stat-badge--open'"
       >
-        {{ store.wolfCreekClosed ? 'CLOSED' : 'OPEN' }}
+        {{ store.wolfCreekClosed ? '🔴 CLOSED' : '🟢 OPEN' }}
       </span>
       <span class="stat-label">wolf creek</span>
     </div>
     <div class="stat" v-if="store.wolfCreekPass?.air_temperature">
-      <span class="stat-value">{{ store.wolfCreekPass.air_temperature }}&deg;</span>
+      <span class="stat-value">🌡️ {{ store.wolfCreekPass.air_temperature }}°</span>
       <span class="stat-label">pass temp</span>
     </div>
     <div class="stat" v-if="store.selectedRoute">
-      <span class="stat-value">{{ store.distanceMiles }}</span>
-      <span class="stat-label">miles</span>
+      <span class="stat-value">📏 {{ store.distanceDisplay || store.distanceMiles + ' mi' }}</span>
+      <span class="stat-label">distance</span>
     </div>
     <div class="stat">
-      <span class="stat-value">{{ store.travelTimeMin ?? '--' }}</span>
-      <span class="stat-label">min drive</span>
+      <span class="stat-value">🚗 {{ store.travelTimeDisplay || (store.travelTimeMin ? store.travelTimeMin + 'm' : '--') }}</span>
+      <span class="stat-label">drive time</span>
     </div>
     <div class="stat">
-      <span class="stat-value">{{ store.cameraCount }}</span>
+      <span class="stat-value">📷 {{ store.cameraCount }}</span>
       <span class="stat-label">cameras</span>
     </div>
     <div class="stat" :class="{ 'stat-danger': store.snowCount > 0 }">
-      <span class="stat-value">{{ store.snowCount }}</span>
-      <span class="stat-label">snow</span>
-    </div>
-    <div class="stat" v-if="store.currentCycle?.events.length">
-      <span class="stat-value">{{ store.currentCycle.events.length }}</span>
-      <span class="stat-label">events</span>
+      <span class="stat-value">{{ store.snowCount > 0 ? '❄️' : '☀️' }} {{ store.snowCount }}</span>
+      <span class="stat-label">{{ store.snowCount > 0 ? 'snow!' : 'clear' }}</span>
     </div>
     <div class="stat" v-if="store.plowCount > 0">
-      <span class="stat-value stat-plow">{{ store.plowCount }}</span>
-      <span class="stat-label">plows</span>
+      <span class="stat-value stat-plow">🚜 {{ store.plowCount }}</span>
+      <span class="stat-label">plows out</span>
     </div>
   </div>
 </template>
@@ -50,32 +46,42 @@ const store = useCycleStore()
 <style scoped>
 .route-summary {
   display: flex;
-  gap: 1rem;
-  padding: 0.75rem 1rem;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
   background: var(--color-surface);
-  border-radius: 8px;
+  border-radius: 12px;
   overflow-x: auto;
   flex-wrap: wrap;
+  border: 1px solid var(--color-border);
 }
 
 .stat {
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-width: 60px;
+  min-width: 70px;
+  padding: 0.25rem 0.5rem;
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+
+.stat:hover {
+  background: rgba(0, 0, 0, 0.03);
 }
 
 .stat-value {
-  font-size: 1.5rem;
+  font-size: 1.15rem;
   font-weight: 700;
   color: var(--color-text);
+  white-space: nowrap;
 }
 
 .stat-label {
-  font-size: 0.75rem;
+  font-size: 0.65rem;
   color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  margin-top: 0.1rem;
 }
 
 .stat-danger .stat-value {
@@ -85,7 +91,7 @@ const store = useCycleStore()
 .stat-badge {
   font-size: 0.85rem;
   padding: 0.15rem 0.5rem;
-  border-radius: 4px;
+  border-radius: 6px;
   letter-spacing: 0.05em;
 }
 
