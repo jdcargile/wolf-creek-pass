@@ -26,10 +26,10 @@ from analyze import analyze_image_bytes
 from export import export_cycle_index, export_cycle_to_file
 from models import CaptureRecord, CycleSummary
 from route import get_route
-from settings import Settings
+from settings import ROUTE_CAMERA_IDS, Settings
 from storage import create_storage
 from udot import (
-    fetch_route_cameras,
+    fetch_all_cameras,
     fetch_route_conditions,
     fetch_route_events,
     fetch_route_weather,
@@ -63,16 +63,14 @@ def run_capture_cycle(settings: Settings) -> None:
         console.print("[yellow]No Google Maps API key -- skipping route[/yellow]")
         route = storage.get_route()
 
-    # 2. Fetch cameras along route
-    if route and route.polyline:
-        cameras = fetch_route_cameras(
-            settings.udot_api_key, route, settings.camera_buffer_km
-        )
-    else:
-        # Fallback: fetch all cameras, no route filtering
-        from udot import fetch_all_cameras
-
-        cameras = fetch_all_cameras(settings.udot_api_key)
+    # 2. Fetch cameras (hardcoded route IDs -- no need to fetch all 2000+)
+    all_cameras = fetch_all_cameras(settings.udot_api_key)
+    camera_lookup = {c.Id: c for c in all_cameras}
+    cameras = [camera_lookup[cid] for cid in ROUTE_CAMERA_IDS if cid in camera_lookup]
+    console.print(
+        f"Matched [bold]{len(cameras)}[/bold] of {len(ROUTE_CAMERA_IDS)} "
+        f"hardcoded route cameras"
+    )
 
     # 3. Download images + analyze with Claude Vision
     vision_client = anthropic.Anthropic(api_key=settings.anthropic_api_key)

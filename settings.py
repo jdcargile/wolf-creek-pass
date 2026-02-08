@@ -4,6 +4,41 @@ from pydantic import Field
 from pydantic_settings import BaseSettings
 
 
+# Hardcoded camera IDs along the Riverton -> Hanna route.
+# Route: I-15 S -> US-189 (Provo Canyon) -> US-40 (Heber -> Daniels Summit ->
+#         Strawberry) -> SR-35 (Wolf Creek Pass) -> Duchesne area
+# Selected from UDOT's 2000+ cameras. Only fetch/analyze these.
+ROUTE_CAMERA_IDS: list[int] = [
+    # Provo Canyon (US-189)
+    90363,  # US-189 @ Mouth of Provo Canyon
+    87874,  # US-189 @ Springdell
+    90727,  # US-189 @ Canyon Glen Park
+    90626,  # US-189 @ Fishermen's
+    90728,  # US-189 @ Lower Deer Creek Rd
+    90275,  # US-189 @ Deer Creek Dam
+    # Heber Valley -> Daniels Summit (US-40)
+    90389,  # US-40 @ US-189 / 1200 S, Heber
+    90353,  # US-40 @ 100 S, Heber
+    91773,  # US-40 @ Coyote Canyon Pkwy, Heber
+    87716,  # US-40 @ Deer Hollow Rd
+    90593,  # US-40 @ MP 27.53
+    92985,  # US-40 SB @ Lodge Pole / MP 33.43
+    90307,  # US-40 @ Daniels Summit
+    # Strawberry Reservoir (US-40)
+    90207,  # US-40 @ Strawberry Rd
+    88216,  # US-40 @ Strawberry Reservoir
+    90980,  # US-40 @ Strawberry Reservoir Ladders
+    90465,  # US-40 @ MP 49.14
+    # Wolf Creek Pass (SR-35) -- the money cameras
+    90544,  # SR-35 RWIS @ Wolf Creek / MP 9.92
+    90779,  # SR-35 RWIS EB @ Wolf Creek Pass / MP 19.33
+    # Duchesne area (US-40)
+    90043,  # US-40 @ WA/DU County Line
+    90661,  # US-40 @ MP 69.81
+    89190,  # US-40 @ 100 W / US-191, Duchesne
+]
+
+
 class Settings(BaseSettings):
     """All configuration for Wolf Creek Pass, loaded from .env or environment."""
 
