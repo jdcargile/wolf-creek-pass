@@ -150,3 +150,17 @@ class TestSQLiteStorageImages:
         assert "test.jpg" in url
         # Verify file was written
         assert (tmp_path / "images" / "test.jpg").read_bytes() == b"fake-jpeg-data"
+
+
+class TestSQLiteStorageImageHashes:
+    def test_save_and_get_hash(self, sqlite_storage):
+        sqlite_storage.save_image_hash(100, "abc123")
+        assert sqlite_storage.get_image_hash(100) == "abc123"
+
+    def test_get_nonexistent_hash(self, sqlite_storage):
+        assert sqlite_storage.get_image_hash(999) is None
+
+    def test_upsert_hash(self, sqlite_storage):
+        sqlite_storage.save_image_hash(100, "old_hash")
+        sqlite_storage.save_image_hash(100, "new_hash")
+        assert sqlite_storage.get_image_hash(100) == "new_hash"

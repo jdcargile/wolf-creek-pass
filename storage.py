@@ -79,6 +79,10 @@ class Storage(Protocol):
     def save_image(self, key: str, data: bytes) -> str: ...
     def get_image_url(self, key: str) -> str: ...
 
+    # Image hashes (for dedup -- skip analysis if image unchanged)
+    def get_image_hash(self, camera_id: int) -> str | None: ...
+    def save_image_hash(self, camera_id: int, hash_hex: str) -> None: ...
+
 
 # ---- SQLite Storage ----
 
@@ -204,6 +208,13 @@ class SQLiteStorage:
                 wind_direction TEXT,
                 precipitation TEXT,
                 relative_humidity TEXT
+            )
+        """)
+
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS image_hashes (
+                camera_id INTEGER PRIMARY KEY,
+                hash_hex TEXT NOT NULL
             )
         """)
 
@@ -528,6 +539,25 @@ class SQLiteStorage:
 
     def get_image_url(self, key: str) -> str:
         return str(self.images_dir / key)
+
+    # -- Image Hashes --
+
+    def get_image_hash(self, camera_id: int) -> str | None:
+        conn = self._conn()
+        row = conn.execute(
+            "SELECT hash_hex FROM image_hashes WHERE camera_id = ?", (camera_id,)
+        ).fetchone()
+        conn.close()
+        return row["hash_hex"] if row else None
+
+    def save_image_hash(self, camera_id: int, hash_hex: str) -> None:
+        conn = self._conn()
+        conn.execute(
+            "INSERT OR REPLACE INTO image_hashes (camera_id, hash_hex) VALUES (?, ?)",
+            (camera_id, hash_hex),
+        )
+        conn.commit()
+        conn.close()
 
 
 # ---- DynamoDB + S3 Storage ----
@@ -940,6 +970,22 @@ class DynamoStorage:
         if self._endpoint_url:
             return f"{self._endpoint_url}/{self.bucket_name}/images/{key}"
         return f"https://{self.bucket_name}.s3.amazonaws.com/images/{key}"
+
+    # -- Image Hashes --
+
+    def get_image_hash(self, camera_id: int) -> str | None:
+        resp = self.table.get_item(Key={"PK": f"HASH#{camera_id}", "SK": "HASH"})
+        item = resp.get("Item")
+        return item["hash_hex"] if item else None
+
+    def save_image_hash(self, camera_id: int, hash_hex: str) -> None:
+        self.table.put_item(
+            Item={
+                "PK": f"HASH#{camera_id}",
+                "SK": "HASH",
+                "hash_hex": hash_hex,
+            }
+        )
 
 
 # ---- Factory ----

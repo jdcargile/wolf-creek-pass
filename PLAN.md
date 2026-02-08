@@ -100,16 +100,19 @@ LocalStack emulates DynamoDB + S3 locally via Docker. Same boto3 code, just a di
 
 ## API Costs
 
+Runs every 3 hours (~240 cycles/month). Uses Haiku 3.5 with SHA-256 image hash dedup
+(skips Claude if camera image unchanged — typically 30-50% cache hit rate).
+
 | Service | Usage | Monthly Cost |
 |---------|-------|-------------|
-| Google Directions API | ~720 requests/month (hourly) | **$0** (free tier: 10,000/month) |
-| Anthropic Claude Vision | ~720 cycles x ~15 cameras = ~10,800 images | ~$5-10 (depends on image size) |
-| UDOT API | ~720 cycles x 6 endpoints = ~4,320 calls | **$0** (free, rate limited 10/min) |
-| DynamoDB | ~15,000 writes + ~50,000 reads/month | **$0** (always-free tier) |
-| S3 | ~5-10 GB images/month | **$0.23/GB** (~$2/month) |
-| Lambda | ~720 invocations x ~60s each | **$0** (free tier: 400K GB-sec) |
-| EventBridge | 720 events/month | **$0** (free) |
-| **Total** | | **~$7-12/month** (mostly Claude API) |
+| Google Directions API | ~240 requests/month (every 3hr) | **$0** (free tier: 10,000/month) |
+| Anthropic Claude Haiku | ~240 cycles x ~15 cameras x ~60% new = ~2,160 images | **~$2-3** ($0.80/$4 per MTok) |
+| UDOT API | ~240 cycles x 6 endpoints = ~1,440 calls | **$0** (free, rate limited 10/min) |
+| DynamoDB | ~5,000 writes + ~15,000 reads/month | **$0** (always-free tier) |
+| S3 | ~2-5 GB images/month | **$0.23/GB** (~$1/month) |
+| Lambda | ~240 invocations x ~60s each | **$0** (free tier: 400K GB-sec) |
+| EventBridge | 240 events/month | **$0** (free) |
+| **Total** | | **~$3-4/month** |
 
 ## File Structure
 
@@ -290,4 +293,4 @@ Rate limit: 10 calls per 60 seconds. All endpoints return ALL records (no server
 - Google Directions API provides route polyline + traffic-aware travel time. Free tier covers ~10,000 requests/month.
 - DynamoDB always-free tier: 25GB storage, 25 RCU/25 WCU. More than enough.
 - S3 is the only ongoing cost after free tier expires (~$0.023/GB/month for images).
-- Claude Vision API is the largest cost driver (~$5-10/month at hourly cycles with ~15 cameras).
+- Claude Vision cost minimized via: Haiku 3.5 (not Sonnet), 3hr schedule (not hourly), SHA-256 image hash dedup (skip unchanged images). Estimated ~$2-3/month.

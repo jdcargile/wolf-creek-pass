@@ -55,7 +55,7 @@ def analyze_image_bytes(
 
     try:
         message = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-haiku-4-20250414",
             max_tokens=300,
             messages=[
                 {

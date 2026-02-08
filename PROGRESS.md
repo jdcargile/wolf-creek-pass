@@ -233,3 +233,10 @@
   - Covers: analyze, route, models, storage, udot, export
   - Uses pytest, responses (HTTP mocking), tmp_path fixtures
   - `poe test` and `poe test:cov` tasks added
+- Cost optimization:
+  - Switched Claude model from Sonnet to Haiku 3.5 (~4x cheaper)
+  - Changed schedule from hourly to every 3 hours (3x fewer cycles)
+  - Added SHA-256 image hash dedup: skips Claude analysis if camera image unchanged
+  - Added `image_hashes` table (SQLite) + `HASH#` PK pattern (DynamoDB)
+  - Estimated monthly cost: ~$1-4/month (was ~$50/month with Sonnet hourly)
+  - 3 new hash tests added (77 total, all passing)

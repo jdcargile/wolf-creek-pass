@@ -136,7 +136,7 @@ class WolfCreekPassStack(Stack):
             self,
             "HourlyCaptureRule",
             rule_name="wolf-creek-hourly-capture",
-            schedule=events.Schedule.rate(Duration.hours(1)),
+            schedule=events.Schedule.rate(Duration.hours(3)),
             targets=[targets.LambdaFunction(capture_fn)],
         )
 
