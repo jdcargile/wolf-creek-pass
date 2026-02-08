@@ -18,7 +18,7 @@ function serveOutputData(): Plugin {
   return {
     name: 'serve-output-data',
     configureServer(server) {
-      server.middlewares.use('/data', async (req, res, next) => {
+      server.middlewares.use('/data', async (req, res) => {
         const filePath = resolve(dataDir, (req.url || '/').slice(1))
         if (existsSync(filePath)) {
           const content = await readFile(filePath, 'utf-8')
@@ -26,7 +26,9 @@ function serveOutputData(): Plugin {
           res.setHeader('Access-Control-Allow-Origin', '*')
           res.end(content)
         } else {
-          next()
+          res.statusCode = 404
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify({ error: 'No data yet. Run: poe monitor:once' }))
         }
       })
     },
