@@ -39,10 +39,16 @@ onMounted(async () => {
 
     <!-- Dashboard content -->
     <template v-else-if="store.hasData">
-      <!-- Wolf Creek closure banner -->
+      <!-- Route closure banners -->
       <div v-if="store.wolfCreekClosed" class="closure-banner">
         Wolf Creek Pass (SR-35) is <strong>CLOSED</strong>.
         Showing US-40/Tabiona bypass route.
+      </div>
+      <div
+        v-else-if="store.selectedRoute?.has_closure"
+        class="closure-banner"
+      >
+        Active closure reported on <strong>{{ store.selectedRoute.name }}</strong> route.
       </div>
 
       <!-- Route summary bar -->

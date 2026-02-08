@@ -68,17 +68,21 @@ class CaptureRecord(BaseModel):
 
 
 class Route(BaseModel):
-    """A named route with encoded polyline and travel info."""
+    """A named route with encoded polyline and travel info from UDOT 511."""
 
     route_id: str = ""  # e.g. "parleys-wolfcreek"
     name: str = ""  # e.g. "Parley's / Wolf Creek"
     color: str = "#3b82f6"  # Hex color for map polyline
+    share_id: str = ""  # UDOT 511 shared route UUID
     origin: str = ""
     destination: str = ""
-    polyline: str = ""  # Google encoded polyline
+    polyline: str = ""  # Google encoded polyline (from UDOT 511)
     distance_m: int = 0
-    duration_s: int = 0
-    duration_in_traffic_s: int | None = None
+    duration_s: int = 0  # UDOT posted travel time
+    has_closure: bool = False  # any active closures on this route
+    has_conditions: bool = False  # any active road conditions on this route
+    travel_time_display: str = ""  # e.g. "1 hr 45 min"
+    distance_display: str = ""  # e.g. "88.8 miles"
 
 
 # ---- UDOT Road Conditions ----

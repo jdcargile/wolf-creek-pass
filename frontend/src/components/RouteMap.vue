@@ -159,8 +159,8 @@ function formatDistance(meters: number): string {
           <div class="popup">
             <strong>{{ dr.route.name }}</strong>
             <div v-if="dr.route.distance_m" class="popup-road">
-              {{ formatDistance(dr.route.distance_m) }} &middot;
-              {{ formatDuration(dr.route.duration_in_traffic_s || dr.route.duration_s) }}
+              {{ dr.route.distance_display || formatDistance(dr.route.distance_m) }} &middot;
+              {{ dr.route.travel_time_display || formatDuration(dr.route.duration_s) }}
             </div>
           </div>
         </LPopup>
@@ -291,7 +291,7 @@ function formatDistance(meters: number): string {
         <span class="legend-swatch" :style="{ backgroundColor: r.color }"></span>
         <span class="legend-label">{{ r.name }}</span>
         <span v-if="r.duration_s" class="legend-time">
-          {{ formatDuration(r.duration_in_traffic_s || r.duration_s) }}
+          {{ r.travel_time_display || formatDuration(r.duration_s) }}
         </span>
       </div>
       <div v-if="plowMarkers.length" class="legend-item">

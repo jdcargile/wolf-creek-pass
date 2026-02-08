@@ -19,11 +19,11 @@ from pydantic_settings import BaseSettings
 
 @dataclass
 class RouteConfig:
-    """Static definition of a named route with waypoints, cameras, and passes."""
+    """Static definition of a named route with UDOT 511 share ID."""
 
     route_id: str
     name: str
-    waypoints: list[str] = field(default_factory=list)
+    share_id: str = ""  # UDOT 511 shared route UUID
     camera_ids: list[int] = field(default_factory=list)
     pass_ids: list[int] = field(default_factory=list)
     color: str = "#3b82f6"  # Hex color for map polyline
@@ -31,20 +31,16 @@ class RouteConfig:
 
 ROUTES: list[RouteConfig] = [
     # ── PRIMARY: Parley's Canyon → SR-35 Wolf Creek Pass ──────────────
-    # I-15 N → I-215 E → I-80 E (Parley's Canyon) → SR-248 to Kamas →
-    # SR-32 S to Francis → SR-35 E over Wolf Creek Pass → US-40 to Hanna.
-    # ~112 min, ~94 mi per Google Directions.
+    # I-15 N → I-215 E → I-80 E (Parley's Canyon) → US-40 E → exit 4
+    # → UT-248 to Kamas → UT-32 S to Francis → UT-35 E over Wolf Creek
+    # Pass → North Fork Rd to Hanna.
+    # ~88.8 mi, ~1h 45m per UDOT 511 routing.
     #
-    # Waypoints use UDOT camera coordinates ON SR-35 to force the route
-    # through Wolf Creek Pass (city-name waypoints like "Kamas, UT" let
-    # Google shortcut via UT-150 / forest roads).
+    # share_id is from https://prod-ut.ibi511.com/map#route-{share_id}
     RouteConfig(
         route_id="parleys-wolfcreek",
         name="Parley's / Wolf Creek",
-        waypoints=[
-            "via:40.558,-111.131",  # SR-35 RWIS @ Wolf Creek / MP 9.92
-            "via:40.4872,-111.0344",  # SR-35 RWIS EB @ Wolf Creek Pass / MP 19.33
-        ],
+        share_id="720cd440-85f0-433e-8eba-8e505869abd4",
         color="#3b82f6",  # blue
         camera_ids=[
             90602,  # SR-248 RWIS EB @ MP 8.95 (Kamas corridor)
@@ -96,9 +92,6 @@ class Settings(BaseSettings):
     # API keys
     udot_api_key: str = PydanticField(description="UDOT Traffic API key")
     anthropic_api_key: str = PydanticField(description="Anthropic API key")
-    google_maps_api_key: str = PydanticField(
-        default="", description="Google Maps API key"
-    )
 
     # Storage backend
     storage_backend: str = PydanticField(
@@ -117,20 +110,6 @@ class Settings(BaseSettings):
     )
     bucket_name: str = PydanticField(
         default="wolf-creek-pass", description="S3 bucket name"
-    )
-
-    # Route
-    origin: str = PydanticField(
-        default="3814 Sweet Vera Ln, Riverton, UT 84065",
-        description="Route origin address",
-    )
-    destination: str = PydanticField(
-        default="14852 North Fork Rd, Hanna, UT 84031",
-        description="Route destination address",
-    )
-    camera_buffer_km: float = PydanticField(
-        default=2.0,
-        description="Max distance (km) from route to include a camera",
     )
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}

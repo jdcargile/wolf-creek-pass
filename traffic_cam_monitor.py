@@ -4,7 +4,7 @@ Wolf Creek Pass -- Route-Aware Traffic Camera Monitor
 
 Orchestrates the full capture cycle:
 1. Check Wolf Creek Pass closure status (UDOT API)
-2. Get routes (Google Directions API -- 3 named routes)
+2. Get routes (UDOT 511 shared route API)
 3. Fetch cameras along routes (conditional on closure status)
 4. Download + analyze camera images (Claude Vision)
 5. Fetch road conditions, events, weather, passes, plows (UDOT API)
@@ -58,19 +58,13 @@ def run_capture_cycle(settings: Settings) -> None:
     except Exception as e:
         console.print(f"[yellow]Wolf Creek status check failed:[/yellow] {e}")
 
-    # 2. Get route(s) from Google Directions API
+    # 2. Get route(s) from UDOT 511 shared route API
     routes = []
-    if settings.google_maps_api_key:
-        try:
-            routes = get_routes(settings)
-            storage.save_routes(routes)
-        except Exception as e:
-            console.print(
-                f"[yellow]Route fetch failed (continuing without):[/yellow] {e}"
-            )
-            routes = storage.get_routes()
-    else:
-        console.print("[yellow]No Google Maps API key -- skipping routes[/yellow]")
+    try:
+        routes = get_routes()
+        storage.save_routes(routes)
+    except Exception as e:
+        console.print(f"[yellow]Route fetch failed (continuing without):[/yellow] {e}")
         routes = storage.get_routes()
 
     primary_route = routes[0] if routes else None
@@ -219,11 +213,7 @@ def run_capture_cycle(settings: Settings) -> None:
     cycle.cameras_processed = len(cameras)
     cycle.snow_count = snow_count
     cycle.event_count = len(events)
-    cycle.travel_time_s = (
-        primary_route.duration_in_traffic_s or primary_route.duration_s
-        if primary_route
-        else None
-    )
+    cycle.travel_time_s = primary_route.duration_s if primary_route else None
     cycle.distance_m = primary_route.distance_m if primary_route else None
     storage.save_cycle(cycle)
 

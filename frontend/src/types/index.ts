@@ -33,12 +33,16 @@ export interface Route {
   route_id: string
   name: string
   color: string
+  share_id: string
   origin: string
   destination: string
   polyline: string
   distance_m: number
   duration_s: number
-  duration_in_traffic_s: number | null
+  has_closure: boolean
+  has_conditions: boolean
+  travel_time_display: string
+  distance_display: string
 }
 
 export interface RoadCondition {

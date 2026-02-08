@@ -147,17 +147,18 @@ def route():
         )
         return
 
-    distance_mi = r.distance_m / 1609.34
-    duration_min = r.duration_s / 60
-
     console.print(f"\n[bold]Route:[/bold] {r.origin}")
     console.print(f"    --> {r.destination}")
-    console.print(f"  Distance: [bold]{distance_mi:.1f} miles[/bold]")
-    console.print(f"  Duration: [bold]{duration_min:.0f} min[/bold]")
-
-    if r.duration_in_traffic_s:
-        traffic_min = r.duration_in_traffic_s / 60
-        console.print(f"  With traffic: [bold]{traffic_min:.0f} min[/bold]")
+    console.print(
+        f"  Distance: [bold]{r.distance_display or f'{r.distance_m / 1609.34:.1f} miles'}[/bold]"
+    )
+    console.print(
+        f"  Duration: [bold]{r.travel_time_display or f'{r.duration_s / 60:.0f} min'}[/bold]"
+    )
+    if r.has_closure:
+        console.print("  [red bold]Active closures on route![/red bold]")
+    if r.has_conditions:
+        console.print("  [yellow]Route conditions reported[/yellow]")
 
 
 @cli.command()

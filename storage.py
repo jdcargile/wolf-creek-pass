@@ -155,12 +155,16 @@ class SQLiteStorage:
                 route_id TEXT PRIMARY KEY,
                 name TEXT,
                 color TEXT,
+                share_id TEXT,
                 origin TEXT,
                 destination TEXT,
                 polyline TEXT,
                 distance_m INTEGER,
                 duration_s INTEGER,
-                duration_in_traffic_s INTEGER
+                has_closure INTEGER DEFAULT 0,
+                has_conditions INTEGER DEFAULT 0,
+                travel_time_display TEXT,
+                distance_display TEXT
             )
         """)
 
@@ -369,19 +373,24 @@ class SQLiteStorage:
         for route in routes:
             conn.execute(
                 """INSERT OR REPLACE INTO routes
-                (route_id, name, color, origin, destination, polyline,
-                 distance_m, duration_s, duration_in_traffic_s)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (route_id, name, color, share_id, origin, destination, polyline,
+                 distance_m, duration_s, has_closure, has_conditions,
+                 travel_time_display, distance_display)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     route.route_id,
                     route.name,
                     route.color,
+                    route.share_id,
                     route.origin,
                     route.destination,
                     route.polyline,
                     route.distance_m,
                     route.duration_s,
-                    route.duration_in_traffic_s,
+                    1 if route.has_closure else 0,
+                    1 if route.has_conditions else 0,
+                    route.travel_time_display,
+                    route.distance_display,
                 ),
             )
         conn.commit()
@@ -396,12 +405,16 @@ class SQLiteStorage:
                 route_id=r["route_id"],
                 name=r["name"] or "",
                 color=r["color"] or "#3b82f6",
+                share_id=r["share_id"] or "",
                 origin=r["origin"] or "",
                 destination=r["destination"] or "",
                 polyline=r["polyline"] or "",
                 distance_m=r["distance_m"] or 0,
                 duration_s=r["duration_s"] or 0,
-                duration_in_traffic_s=r["duration_in_traffic_s"],
+                has_closure=bool(r["has_closure"]),
+                has_conditions=bool(r["has_conditions"]),
+                travel_time_display=r["travel_time_display"] or "",
+                distance_display=r["distance_display"] or "",
             )
             for r in rows
         ]
@@ -926,12 +939,16 @@ class DynamoStorage:
                         "route_id": route.route_id,
                         "name": route.name,
                         "color": route.color,
+                        "share_id": route.share_id,
                         "origin": route.origin,
                         "destination": route.destination,
                         "polyline": route.polyline,
                         "distance_m": route.distance_m,
                         "duration_s": route.duration_s,
-                        "duration_in_traffic_s": route.duration_in_traffic_s,
+                        "has_closure": route.has_closure,
+                        "has_conditions": route.has_conditions,
+                        "travel_time_display": route.travel_time_display,
+                        "distance_display": route.distance_display,
                     }
                 )
             )
@@ -947,12 +964,16 @@ class DynamoStorage:
                 route_id=item.get("route_id", ""),
                 name=item.get("name", ""),
                 color=item.get("color", "#3b82f6"),
+                share_id=item.get("share_id", ""),
                 origin=item.get("origin", ""),
                 destination=item.get("destination", ""),
                 polyline=item.get("polyline", ""),
                 distance_m=int(item.get("distance_m", 0)),
                 duration_s=int(item.get("duration_s", 0)),
-                duration_in_traffic_s=_int_safe(item.get("duration_in_traffic_s")),
+                has_closure=bool(item.get("has_closure", False)),
+                has_conditions=bool(item.get("has_conditions", False)),
+                travel_time_display=item.get("travel_time_display", ""),
+                distance_display=item.get("distance_display", ""),
             )
             for item in resp.get("Items", [])
         ]

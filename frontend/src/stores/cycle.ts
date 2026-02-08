@@ -31,8 +31,17 @@ export const useCycleStore = defineStore('cycle', () => {
   const travelTimeMin = computed(() => {
     const r = selectedRoute.value
     if (!r) return null
-    const s = r.duration_in_traffic_s ?? r.duration_s
-    return s ? Math.round(s / 60) : null
+    return r.duration_s ? Math.round(r.duration_s / 60) : null
+  })
+
+  const travelTimeDisplay = computed(() => {
+    const r = selectedRoute.value
+    return r?.travel_time_display || null
+  })
+
+  const distanceDisplay = computed(() => {
+    const r = selectedRoute.value
+    return r?.distance_display || null
   })
 
   const distanceMiles = computed(() => {
@@ -122,6 +131,8 @@ export const useCycleStore = defineStore('cycle', () => {
     routes,
     selectedRoute,
     travelTimeMin,
+    travelTimeDisplay,
+    distanceDisplay,
     distanceMiles,
     passes,
     plows,

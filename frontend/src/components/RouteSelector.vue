@@ -26,7 +26,7 @@ function formatDuration(seconds: number): string {
       >
         {{ route.name }}
         <template v-if="route.duration_s">
-          — {{ formatDuration(route.duration_in_traffic_s || route.duration_s) }}
+          — {{ route.travel_time_display || formatDuration(route.duration_s) }}
         </template>
       </option>
     </select>

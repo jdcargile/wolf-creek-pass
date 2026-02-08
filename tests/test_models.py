@@ -63,9 +63,13 @@ class TestRoute:
         assert r.route_id == ""
         assert r.name == ""
         assert r.color == "#3b82f6"
+        assert r.share_id == ""
         assert r.polyline == ""
         assert r.distance_m == 0
-        assert r.duration_in_traffic_s is None
+        assert r.has_closure is False
+        assert r.has_conditions is False
+        assert r.travel_time_display == ""
+        assert r.distance_display == ""
 
     def test_full(self, sample_route):
         assert sample_route.route_id == "parleys-wolfcreek"

@@ -1,126 +1,124 @@
 """
 Route planning and camera-to-route matching.
 
-Uses Google Directions API to get route polylines and travel times for
-multiple named routes. Filters UDOT cameras by proximity using haversine.
+Uses UDOT 511 shared route API to get route polylines, travel times,
+and per-segment conditions/events/cameras. Filters UDOT cameras by
+proximity using haversine.
 """
 
 from __future__ import annotations
 
+import json
 import math
 
-import googlemaps
 import polyline as polyline_codec
+import requests
 from rich.console import Console
 
 from models import Camera, Route
-from settings import ROUTES, RouteConfig, Settings
+from settings import ROUTES, RouteConfig
 
 console = Console()
 
 EARTH_RADIUS_KM = 6371.0
+UDOT_511_URL = "https://prod-ut.ibi511.com/Api/Route/GetRouteByShareID"
 
 
-def get_routes(settings: Settings) -> list[Route]:
-    """Fetch all configured routes from Google Directions API."""
-    gmaps = googlemaps.Client(key=settings.google_maps_api_key)
+def get_routes() -> list[Route]:
+    """Fetch all configured routes from UDOT 511 shared route API."""
     routes: list[Route] = []
 
     for route_cfg in ROUTES:
         try:
-            route = _fetch_single_route(gmaps, settings, route_cfg)
+            route = _fetch_511_route(route_cfg)
             routes.append(route)
         except Exception as e:
             console.print(f"[yellow]Route '{route_cfg.name}' failed:[/yellow] {e}")
-            # Return a stub so the route still appears in the data
             routes.append(
                 Route(
                     route_id=route_cfg.route_id,
                     name=route_cfg.name,
                     color=route_cfg.color,
-                    origin=settings.origin,
-                    destination=settings.destination,
+                    share_id=route_cfg.share_id,
                 )
             )
 
     return routes
 
 
-def _fetch_single_route(
-    gmaps: googlemaps.Client,
-    settings: Settings,
-    route_cfg: RouteConfig,
-) -> Route:
-    """Fetch a single route with waypoints from Google Directions API."""
-    kwargs: dict = {
-        "origin": settings.origin,
-        "destination": settings.destination,
-        "mode": "driving",
-        "departure_time": "now",
-    }
-
-    if route_cfg.waypoints:
-        kwargs["waypoints"] = [f"via:{wp}" for wp in route_cfg.waypoints]
-
-    result = gmaps.directions(**kwargs)
-
-    if not result:
-        console.print(f"[red]No result for route '{route_cfg.name}'[/red]")
+def _fetch_511_route(route_cfg: RouteConfig) -> Route:
+    """Fetch a single route from UDOT 511 shared route API."""
+    if not route_cfg.share_id:
+        console.print(f"[yellow]No share_id for route '{route_cfg.name}'[/yellow]")
         return Route(
             route_id=route_cfg.route_id,
             name=route_cfg.name,
             color=route_cfg.color,
-            origin=settings.origin,
-            destination=settings.destination,
         )
 
-    leg = result[0]["legs"][0]
-    overview_polyline = result[0]["overview_polyline"]["points"]
+    resp = requests.post(
+        UDOT_511_URL,
+        params={"shareId": route_cfg.share_id},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    data = resp.json()
 
-    # When using waypoints, sum all legs for total distance/duration
-    total_distance = sum(l["distance"]["value"] for l in result[0]["legs"])
-    total_duration = sum(l["duration"]["value"] for l in result[0]["legs"])
-    total_traffic = None
-    if all("duration_in_traffic" in l for l in result[0]["legs"]):
-        total_traffic = sum(
-            l["duration_in_traffic"]["value"] for l in result[0]["legs"]
-        )
+    # Parse origin/destination from encodedMarkers
+    origin = ""
+    destination = ""
+    markers_json = data.get("encodedMarkers", "")
+    if markers_json:
+        try:
+            markers = json.loads(markers_json)
+            if len(markers) >= 2:
+                origin = markers[0].get("location", {}).get("Name", "")
+                destination = markers[-1].get("location", {}).get("Name", "")
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+    # UDOT returns polyline as an array — join into one string
+    polyline_parts = data.get("encodedPolyline", [])
+    polyline = polyline_parts[0] if polyline_parts else ""
+
+    # Travel time and distance
+    posted_seconds = data.get("postedTravelTimeSeconds", 0)
+    length_meters = data.get("lengthMeters", 0)
+
+    # Statistics
+    stats = data.get("statistics", {})
+    has_closure = stats.get("hasCurrentClosure", False) or stats.get(
+        "includesClosures", False
+    )
+    has_conditions = stats.get("includesRouteConditions", False)
 
     route = Route(
         route_id=route_cfg.route_id,
         name=route_cfg.name,
         color=route_cfg.color,
-        origin=settings.origin,
-        destination=settings.destination,
-        polyline=overview_polyline,
-        distance_m=total_distance,
-        duration_s=total_duration,
-        duration_in_traffic_s=total_traffic,
+        share_id=route_cfg.share_id,
+        origin=origin,
+        destination=destination,
+        polyline=polyline,
+        distance_m=int(length_meters),
+        duration_s=int(posted_seconds),
+        has_closure=has_closure,
+        has_conditions=has_conditions,
+        travel_time_display=stats.get("travelTimeDisplay", ""),
+        distance_display=stats.get("lengthDisplay", ""),
     )
 
-    distance_mi = route.distance_m / 1609.34
-    duration_min = route.duration_s / 60
     console.print(
         f"Route [bold]{route_cfg.name}[/bold]: "
-        f"[bold]{distance_mi:.1f} mi[/bold], "
-        f"[bold]{duration_min:.0f} min[/bold]"
+        f"[bold]{route.distance_display}[/bold], "
+        f"[bold]{route.travel_time_display}[/bold]"
     )
-    if route.duration_in_traffic_s:
-        traffic_min = route.duration_in_traffic_s / 60
-        console.print(f"  With traffic: [bold]{traffic_min:.0f} min[/bold]")
+    if has_closure:
+        console.print("  [red bold]Active closures on route![/red bold]")
+    if has_conditions:
+        console.print("  [yellow]Route conditions reported[/yellow]")
 
     return route
-
-
-# Keep backward-compat for tests that call get_route()
-def get_route(settings: Settings) -> Route:
-    """Get the primary route. Deprecated -- use get_routes() instead."""
-    routes = get_routes(settings)
-    return (
-        routes[0]
-        if routes
-        else Route(origin=settings.origin, destination=settings.destination)
-    )
 
 
 def decode_route_points(route: Route) -> list[tuple[float, float]]:
