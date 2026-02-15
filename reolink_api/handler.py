@@ -108,8 +108,12 @@ def _parse_date(raw: str | None) -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
-def _query_camera(table: Any, camera_id: str, date_str: str) -> list[dict]:
-    """Query all snapshots for a single camera on a given date."""
+def _query_camera(table: Any, camera_id: str, date_str: str) -> list[dict] | None:
+    """Query all snapshots for a single camera on a given date.
+
+    Returns None if the table is unreachable (missing, auth error, etc.),
+    or a (possibly empty) list of snapshot dicts on success.
+    """
     start_ts = f"{date_str}T00:00:00"
     end_ts = f"{date_str}T23:59:59+99:99"
 
@@ -121,7 +125,7 @@ def _query_camera(table: Any, camera_id: str, date_str: str) -> list[dict]:
         )
     except Exception as exc:
         logger.warning("DynamoDB query failed for %s: %s", camera_id, exc)
-        return []
+        return None
 
     snapshots = []
     for item in response.get("Items", []):
@@ -152,14 +156,25 @@ def _handle_reolink(params: dict) -> dict:
     dynamodb = boto3.resource("dynamodb", region_name=AWS_REGION)
     table = dynamodb.Table(REOLINK_TABLE)
 
+    # Probe the table with the first camera; if it fails, skip all cameras.
+    camera_ids = list(CAMERAS.items())
     cameras = []
-    for camera_id, display_name in CAMERAS.items():
+    first_id, first_name = camera_ids[0]
+    first_snapshots = _query_camera(table, first_id, date_str)
+    if first_snapshots is None:
+        # Table unreachable — return empty results for all cameras
+        for camera_id, display_name in camera_ids:
+            cameras.append({"id": camera_id, "name": display_name, "snapshots": []})
+        return _json_response(200, {"date": date_str, "cameras": cameras})
+
+    cameras.append({"id": first_id, "name": first_name, "snapshots": first_snapshots})
+    for camera_id, display_name in camera_ids[1:]:
         snapshots = _query_camera(table, camera_id, date_str)
         cameras.append(
             {
                 "id": camera_id,
                 "name": display_name,
-                "snapshots": snapshots,
+                "snapshots": snapshots or [],
             }
         )
 
