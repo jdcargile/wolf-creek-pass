@@ -21,8 +21,18 @@ export async function fetchReolinkSnapshots(date: string): Promise<ReolinkRespon
   return resp.json()
 }
 
-export async function fetchSensorPushData(): Promise<SensorPushResponse> {
+/** Fetch current sensor readings only (fast, ~3s). */
+export async function fetchSensorPushSummary(): Promise<SensorPushResponse> {
   const resp = await fetch(apiUrl({ action: 'sensorpush' }))
+  if (!resp.ok) {
+    throw new Error(`SensorPush API error: ${resp.status} ${resp.statusText}`)
+  }
+  return resp.json()
+}
+
+/** Fetch full 7-day history with time series + ranges (slow first load, cached). */
+export async function fetchSensorPushHistory(): Promise<SensorPushResponse> {
+  const resp = await fetch(apiUrl({ action: 'sensorpush', history: '1' }))
   if (!resp.ok) {
     throw new Error(`SensorPush API error: ${resp.status} ${resp.statusText}`)
   }

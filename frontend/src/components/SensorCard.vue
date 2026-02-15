@@ -8,6 +8,7 @@ import { formatTime } from '@/utils/time'
 
 const props = defineProps<{
   sensor: SensorData
+  loadingHistory?: boolean
 }>()
 
 /** Look up a metric value from the current reading by key name. */
@@ -17,7 +18,17 @@ function readCurrent(key: keyof SensorRanges): number | undefined {
   return c[key as keyof SensorCurrent] as number | undefined
 }
 
-/** Filter to only metrics this sensor actually reports. */
+/** Whether range/chart data has been populated (history loaded). */
+const hasHistory = computed(() => {
+  return Object.keys(props.sensor.range_24h).length > 0
+    || Object.keys(props.sensor.range_12h).length > 0
+})
+
+/**
+ * Filter to only metrics this sensor actually reports.
+ * During summary-only phase, use current readings to determine which metrics exist.
+ * Once history arrives, also include metrics that have range data.
+ */
 const availableMetrics = computed<MetricConfig[]>(() =>
   METRIC_CONFIGS.filter((m) => {
     const inRange =
@@ -83,50 +94,70 @@ const lastUpdated = computed(() => {
           <span class="metric-current">{{ fmtCurrent(metric) }}</span>
         </div>
 
-        <!-- 12h bar -->
-        <div class="metric-bar-row" v-if="sensor.range_12h[metric.key]">
-          <span class="period-label">12h</span>
-          <MetricRangeBar
-            :min="sensor.range_12h[metric.key]!.min"
-            :max="sensor.range_12h[metric.key]!.max"
-            :current="currentVal(metric) ?? sensor.range_12h[metric.key]!.max"
-            :unit="metric.unit"
-            :precision="metric.precision"
-          />
-        </div>
+        <!-- History loaded: show range bars + charts -->
+        <template v-if="hasHistory">
+          <!-- 12h bar -->
+          <div class="metric-bar-row" v-if="sensor.range_12h[metric.key]">
+            <span class="period-label">12h</span>
+            <MetricRangeBar
+              :min="sensor.range_12h[metric.key]!.min"
+              :max="sensor.range_12h[metric.key]!.max"
+              :current="currentVal(metric) ?? sensor.range_12h[metric.key]!.max"
+              :unit="metric.unit"
+              :precision="metric.precision"
+            />
+          </div>
 
-        <!-- 24h bar -->
-        <div class="metric-bar-row" v-if="sensor.range_24h[metric.key]">
-          <span class="period-label">24h</span>
-          <MetricRangeBar
-            :min="sensor.range_24h[metric.key]!.min"
-            :max="sensor.range_24h[metric.key]!.max"
-            :current="currentVal(metric) ?? sensor.range_24h[metric.key]!.max"
-            :unit="metric.unit"
-            :precision="metric.precision"
-          />
-        </div>
+          <!-- 24h bar -->
+          <div class="metric-bar-row" v-if="sensor.range_24h[metric.key]">
+            <span class="period-label">24h</span>
+            <MetricRangeBar
+              :min="sensor.range_24h[metric.key]!.min"
+              :max="sensor.range_24h[metric.key]!.max"
+              :current="currentVal(metric) ?? sensor.range_24h[metric.key]!.max"
+              :unit="metric.unit"
+              :precision="metric.precision"
+            />
+          </div>
 
-        <!-- 7-day sparkline chart -->
-        <div
-          class="metric-chart"
-          v-if="hasTimeSeries(metric)"
-        >
-          <span class="period-label chart-label">7d</span>
-          <SparklineChart
-            :data="sensor.time_series[metric.key as keyof SensorTimeSeries]!"
-            :color="metric.color"
-            :unit="metric.unit"
-            :precision="metric.precision"
-          />
-        </div>
+          <!-- 7-day sparkline chart -->
+          <div
+            class="metric-chart"
+            v-if="hasTimeSeries(metric)"
+          >
+            <span class="period-label chart-label">7d</span>
+            <SparklineChart
+              :data="sensor.time_series[metric.key as keyof SensorTimeSeries]!"
+              :color="metric.color"
+              :unit="metric.unit"
+              :precision="metric.precision"
+            />
+          </div>
+        </template>
+
+        <!-- History loading: skeleton placeholders -->
+        <template v-else-if="loadingHistory">
+          <div class="metric-bar-row">
+            <span class="period-label">12h</span>
+            <div class="skeleton skeleton-bar"></div>
+          </div>
+          <div class="metric-bar-row">
+            <span class="period-label">24h</span>
+            <div class="skeleton skeleton-bar"></div>
+          </div>
+          <div class="metric-chart">
+            <span class="period-label chart-label">7d</span>
+            <div class="skeleton skeleton-chart"></div>
+          </div>
+        </template>
       </div>
     </div>
 
     <!-- Footer -->
     <div class="card-footer">
       <span v-if="lastUpdated">Updated {{ lastUpdated }}</span>
-      <span>{{ sensor.reading_count }} readings (7d)</span>
+      <span v-if="hasHistory">{{ sensor.reading_count }} readings (7d)</span>
+      <span v-else-if="loadingHistory" class="shimmer-text">Loading history...</span>
     </div>
   </div>
 </template>
@@ -227,6 +258,39 @@ const lastUpdated = computed(() => {
 
 .chart-label {
   padding-top: 0.2rem;
+}
+
+/* ── Skeleton loading placeholders ─────────────────────────────────────── */
+
+.skeleton {
+  background: linear-gradient(90deg, var(--color-border) 25%, transparent 50%, var(--color-border) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+
+.skeleton-bar {
+  height: 12px;
+  flex: 1;
+}
+
+.skeleton-chart {
+  height: 40px;
+  flex: 1;
+}
+
+.shimmer-text {
+  animation: shimmer-opacity 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes shimmer-opacity {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
 }
 
 /* ── Footer ───────────────────────────────────────────────────────────── */

@@ -5,8 +5,11 @@ import SensorCard from '@/components/SensorCard.vue'
 
 const store = useSensorPushStore()
 
-onMounted(() => {
-  store.load()
+onMounted(async () => {
+  // Phase 1: fast summary (current readings, ~3s)
+  await store.loadSummary()
+  // Phase 2: full 7-day history (charts + ranges, slow but cached on backend)
+  store.loadHistory()
 })
 </script>
 
@@ -14,7 +17,7 @@ onMounted(() => {
   <section class="sensorpush-section">
     <h2>Cabin Sensors</h2>
 
-    <!-- Loading -->
+    <!-- Loading (initial summary) -->
     <div v-if="store.loading" class="sp-status">Loading sensor data...</div>
 
     <!-- Error -->
@@ -23,13 +26,16 @@ onMounted(() => {
     </div>
 
     <!-- Content -->
-    <div v-else-if="store.hasData" class="sensor-grid">
-      <SensorCard
-        v-for="sensor in store.sensors"
-        :key="sensor.id"
-        :sensor="sensor"
-      />
-    </div>
+    <template v-else-if="store.hasData">
+      <div class="sensor-grid">
+        <SensorCard
+          v-for="sensor in store.sensors"
+          :key="sensor.id"
+          :sensor="sensor"
+          :loading-history="store.loadingHistory"
+        />
+      </div>
+    </template>
 
     <!-- No data -->
     <div v-else class="sp-status">

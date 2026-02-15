@@ -151,7 +151,7 @@ class WolfCreekPassStack(Stack):
             runtime=lambda_.Runtime.PYTHON_3_12,
             handler="handler.handler",
             code=lambda_.Code.from_asset("../reolink_api"),
-            timeout=Duration.seconds(30),
+            timeout=Duration.seconds(60),
             memory_size=128,
             environment={
                 "REOLINK_TABLE": "reolink-snapshots",

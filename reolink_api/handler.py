@@ -191,12 +191,17 @@ _SP_HEADERS = {
     "Content-Type": "application/json",
 }
 
-# Module-level token cache (persists across Lambda container invocations)
+# Module-level caches (persist across Lambda container invocations)
 _sp_access_token: str | None = None
 _sp_token_expiry: float = 0
 
+# Response cache — keyed by mode ("summary" or "history")
+_sp_response_cache: dict[str, dict] = {}
+_sp_cache_ts: dict[str, float] = {}
+_SP_CACHE_TTL = 300  # 5 minutes
 
-def _sp_post(url: str, body: dict, headers: dict, timeout: int = 15) -> dict | None:
+
+def _sp_post(url: str, body: dict, headers: dict, timeout: int = 30) -> dict | None:
     """POST JSON to a URL, return parsed JSON or None on failure."""
     data = json.dumps(body).encode()
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
@@ -268,11 +273,10 @@ def _sp_request(endpoint: str, body: dict) -> dict | None:
     data = json.dumps(body).encode()
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=30) as resp:
             return json.loads(resp.read().decode())
     except urllib.error.HTTPError as exc:
         if exc.code == 401:
-            # Token revoked — retry once with fresh token
             logger.info("SensorPush 401 on %s — re-authenticating", endpoint)
             global _sp_access_token, _sp_token_expiry
             _sp_access_token = None
@@ -283,7 +287,7 @@ def _sp_request(endpoint: str, body: dict) -> dict | None:
             headers = {**_SP_HEADERS, "Authorization": token}
             req = urllib.request.Request(url, data=data, headers=headers, method="POST")
             try:
-                with urllib.request.urlopen(req, timeout=15) as resp2:
+                with urllib.request.urlopen(req, timeout=30) as resp2:
                     return json.loads(resp2.read().decode())
             except Exception as exc2:
                 logger.warning("SensorPush retry failed: %s", exc2)
@@ -295,58 +299,61 @@ def _sp_request(endpoint: str, body: dict) -> dict | None:
         return None
 
 
-def _sp_fetch_samples(sensor_ids: list[str], minutes: int) -> dict[str, list[dict]]:
-    """Fetch samples for the given sensors over the last N minutes.
+def _sp_fetch_samples(
+    sensor_ids: list[str], days: int, limit_per_page: int = 2500
+) -> dict[str, list[dict]]:
+    """Fetch samples for the given sensors over the last N days.
 
-    The SensorPush /samples endpoint returns at most ~2500 samples per call.
-    With 2 sensors at 5-min intervals, 7 days ≈ 4032 samples, so we may
-    need to paginate.  Results are returned newest-first from the API.
+    Uses ``last_time`` from each response as the pagination cursor
+    (advancing startTime forward through time).  The API returns up to
+    ``limit`` samples per sensor per page, newest-first within each page.
 
     Returns:
         Dict mapping sensor_id → list of sample dicts (oldest first).
     """
-    start_ts = (datetime.now(timezone.utc) - timedelta(minutes=minutes)).isoformat()
+    start_ts = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     all_samples: dict[str, list[dict]] = {sid: [] for sid in sensor_ids}
-    last_ts: str | None = None
-    max_pages = 10  # safety limit
+    max_pages = 15  # safety limit
 
-    for _ in range(max_pages):
+    for page_num in range(max_pages):
         body: dict[str, Any] = {
             "sensors": sensor_ids,
             "startTime": start_ts,
-            "limit": 2500,
+            "limit": limit_per_page,
+            "measures": SENSOR_METRICS,
         }
-        if last_ts:
-            body["stopTime"] = last_ts
 
+        t0 = time.time()
         data = _sp_request("/samples", body)
+        elapsed = time.time() - t0
         if not data:
             break
 
         sensors_data = data.get("sensors", {})
-        page_count = 0
+        page_total = 0
+        any_full = False
         for sid in sensor_ids:
             samples = sensors_data.get(sid, [])
-            page_count += len(samples)
+            page_total += len(samples)
             all_samples[sid].extend(samples)
+            if len(samples) >= limit_per_page:
+                any_full = True
 
-        # If we got fewer than the limit, we have all the data
-        total_returned = data.get("total_samples", page_count)
-        if page_count < 2500 or total_returned < 2500:
+        last_time = data.get("last_time", "")
+        logger.info(
+            "SensorPush page %d: %d samples, last_time=%s, %.1fs",
+            page_num + 1,
+            page_total,
+            last_time[:19] if last_time else "?",
+            elapsed,
+        )
+
+        # Stop if no sensor returned a full page (we have all data)
+        if not any_full or not last_time:
             break
 
-        # Find the oldest timestamp in this page for pagination
-        oldest_in_page: str | None = None
-        for sid in sensor_ids:
-            samples = sensors_data.get(sid, [])
-            if samples:
-                ts = samples[-1].get("observed", "")
-                if oldest_in_page is None or ts < oldest_in_page:
-                    oldest_in_page = ts
-        if oldest_in_page:
-            last_ts = oldest_in_page
-        else:
-            break
+        # Advance startTime to last_time for next page
+        start_ts = last_time
 
     # Sort each sensor's samples by observed timestamp (oldest first)
     for sid in all_samples:
@@ -404,9 +411,10 @@ def _compute_ranges(
     return current, range_12h, range_24h
 
 
-def _downsample_series(samples: list[dict], max_points: int = 500) -> list[dict]:
+def _downsample_series(samples: list[dict], max_points: int = 168) -> list[dict]:
     """Downsample a time series to at most max_points for chart rendering.
 
+    Default 168 = one point per hour over 7 days — sufficient for a sparkline.
     Selects evenly-spaced points.  Always includes first and last.
     """
     n = len(samples)
@@ -424,9 +432,7 @@ def _downsample_series(samples: list[dict], max_points: int = 500) -> list[dict]
 def _build_time_series(samples: list[dict]) -> dict[str, list]:
     """Build per-metric time series arrays for charting.
 
-    Returns:
-        Dict mapping metric → list of [timestamp_iso, value] pairs.
-        Also includes a "timestamps" key with the raw ISO timestamps.
+    Returns dict mapping metric → list of [timestamp_iso, value] pairs.
     """
     series: dict[str, list] = {}
     for metric in SENSOR_METRICS:
@@ -440,18 +446,36 @@ def _build_time_series(samples: list[dict]) -> dict[str, list]:
     return series
 
 
-def _handle_sensorpush(_params: dict) -> dict:
-    """Handle ?action=sensorpush — live sensor data from SensorPush API."""
-    if not SENSORPUSH_EMAIL or not SENSORPUSH_PASSWORD:
-        return _json_response(500, {"error": "SensorPush credentials not configured"})
+def _build_sensor_response(include_history: bool) -> dict:
+    """Build the sensor response body.
 
+    Args:
+        include_history: If True, fetch 7 days of data and include time_series
+            and range data.  If False, fetch only the most recent reading per
+            sensor (fast summary).
+    """
     sensor_ids = list(SENSORS.keys())
 
-    # Fetch 7 days of samples
-    seven_days_min = 7 * 24 * 60
-    all_samples = _sp_fetch_samples(sensor_ids, seven_days_min)
+    if include_history:
+        all_samples = _sp_fetch_samples(sensor_ids, days=7)
+    else:
+        # Summary mode: fetch only the latest reading per sensor
+        data = _sp_request(
+            "/samples",
+            {
+                "sensors": sensor_ids,
+                "limit": 1,
+                "measures": SENSOR_METRICS,
+            },
+        )
+        all_samples = {}
+        if data:
+            for sid in sensor_ids:
+                all_samples[sid] = data.get("sensors", {}).get(sid, [])
+        else:
+            for sid in sensor_ids:
+                all_samples[sid] = []
 
-    now_iso = datetime.now(timezone.utc).isoformat()
     cutoff_24h = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
     cutoff_12h = (datetime.now(timezone.utc) - timedelta(hours=12)).isoformat()
 
@@ -459,13 +483,12 @@ def _handle_sensorpush(_params: dict) -> dict:
     for sensor_id, display_name in SENSORS.items():
         samples = all_samples.get(sensor_id, [])
 
-        # Compute summary ranges from the full 7-day dataset
-        # (24h/12h filters are applied inside _compute_ranges)
         current, range_12h, range_24h = _compute_ranges(samples, cutoff_12h, cutoff_24h)
 
-        # Build time series for graphs (downsampled for frontend perf)
-        chart_samples = _downsample_series(samples)
-        time_series = _build_time_series(chart_samples)
+        time_series: dict[str, list] = {}
+        if include_history and samples:
+            chart_samples = _downsample_series(samples)
+            time_series = _build_time_series(chart_samples)
 
         sensors.append(
             {
@@ -479,7 +502,41 @@ def _handle_sensorpush(_params: dict) -> dict:
             }
         )
 
-    return _json_response(200, {"sensors": sensors})
+    return {"sensors": sensors}
+
+
+def _handle_sensorpush(params: dict) -> dict:
+    """Handle ?action=sensorpush — live sensor data from SensorPush API.
+
+    Query params:
+        history=1  — include 7-day time series data (slow first load, cached)
+        (default)  — summary only with current readings (fast)
+    """
+    if not SENSORPUSH_EMAIL or not SENSORPUSH_PASSWORD:
+        return _json_response(500, {"error": "SensorPush credentials not configured"})
+
+    include_history = params.get("history") == "1"
+    cache_key = "history" if include_history else "summary"
+
+    # Check response cache
+    cached_ts = _sp_cache_ts.get(cache_key, 0)
+    if cache_key in _sp_response_cache and (time.time() - cached_ts) < _SP_CACHE_TTL:
+        logger.info(
+            "SensorPush %s: serving from cache (age %.0fs)",
+            cache_key,
+            time.time() - cached_ts,
+        )
+        return _sp_response_cache[cache_key]
+
+    logger.info("SensorPush %s: fetching fresh data", cache_key)
+    body = _build_sensor_response(include_history)
+    response = _json_response(200, body)
+
+    # Cache the response
+    _sp_response_cache[cache_key] = response
+    _sp_cache_ts[cache_key] = time.time()
+
+    return response
 
 
 # ═════════════════════════════════════════════════════════════════════════════
