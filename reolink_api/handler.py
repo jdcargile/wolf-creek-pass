@@ -113,11 +113,15 @@ def _query_camera(table: Any, camera_id: str, date_str: str) -> list[dict]:
     start_ts = f"{date_str}T00:00:00"
     end_ts = f"{date_str}T23:59:59+99:99"
 
-    response = table.query(
-        KeyConditionExpression=(
-            Key("camera").eq(camera_id) & Key("timestamp").between(start_ts, end_ts)
-        ),
-    )
+    try:
+        response = table.query(
+            KeyConditionExpression=(
+                Key("camera").eq(camera_id) & Key("timestamp").between(start_ts, end_ts)
+            ),
+        )
+    except Exception as exc:
+        logger.warning("DynamoDB query failed for %s: %s", camera_id, exc)
+        return []
 
     snapshots = []
     for item in response.get("Items", []):

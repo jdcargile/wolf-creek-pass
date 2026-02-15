@@ -50,7 +50,20 @@ class ReolinkHandler(BaseHTTPRequestHandler):
             "queryStringParameters": {k: v[0] for k, v in qs.items()},
         }
 
-        result = handler(event, None)
+        try:
+            result = handler(event, None)
+        except Exception as exc:
+            import traceback
+
+            traceback.print_exc()
+            result = {
+                "statusCode": 500,
+                "headers": {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*",
+                },
+                "body": json.dumps({"error": str(exc)}),
+            }
 
         self.send_response(result.get("statusCode", 200))
         for key, val in result.get("headers", {}).items():
