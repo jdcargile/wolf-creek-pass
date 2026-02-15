@@ -35,11 +35,12 @@ function fmtConf(c: number): string {
   return `${Math.round(c * 100)}%`
 }
 
-/** Format the snapshot timestamp as a short time string. */
+import { formatTime } from '@/utils/time'
+
+/** Format the snapshot timestamp as a short time string in Mountain Time. */
 const timeLabel = computed(() => {
   if (!props.snapshot) return ''
-  const d = new Date(props.snapshot.timestamp)
-  return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  return formatTime(props.snapshot.timestamp)
 })
 
 /** Total snapshot count for this camera. */

@@ -4,20 +4,17 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { ReolinkCamera, ReolinkSnapshot } from '@/types/reolink'
 import { fetchReolinkSnapshots } from '@/composables/useReolinkApi'
+import { todayMountain, mountainHour } from '@/utils/time'
 
-function todayUTC(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
-/** Extract the UTC hour (0-23) from an ISO timestamp string. */
+/** Extract the Mountain Time hour (0-23) from an ISO timestamp string. */
 function hourOf(ts: string): number {
-  return new Date(ts).getUTCHours()
+  return mountainHour(ts)
 }
 
 export const useReolinkStore = defineStore('reolink', () => {
   // ── State ────────────────────────────────────────────────────────────────
   const cameras = ref<ReolinkCamera[]>([])
-  const selectedDate = ref(todayUTC())
+  const selectedDate = ref(todayMountain())
   const selectedHour = ref<number | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)

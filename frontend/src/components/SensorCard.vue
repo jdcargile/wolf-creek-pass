@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { SensorData, MetricConfig, SensorRanges, SensorCurrent } from '@/types/sensorpush'
+import type { SensorData, MetricConfig, SensorRanges, SensorCurrent, SensorTimeSeries } from '@/types/sensorpush'
 import { METRIC_CONFIGS } from '@/types/sensorpush'
 import MetricRangeBar from '@/components/MetricRangeBar.vue'
+import SparklineChart from '@/components/SparklineChart.vue'
+import { formatTime } from '@/utils/time'
 
 const props = defineProps<{
   sensor: SensorData
@@ -39,17 +41,22 @@ function fmtCurrent(metric: MetricConfig): string {
   return `${val.toFixed(metric.precision)}${metric.unit}`
 }
 
+/** Check if a metric has time series data for charting. */
+function hasTimeSeries(metric: MetricConfig): boolean {
+  const series = props.sensor.time_series?.[metric.key as keyof SensorTimeSeries]
+  return !!series && series.length >= 2
+}
+
 /** Format the primary current reading (temperature). */
 const currentTemp = computed(() => {
   if (!props.sensor.current?.temperature) return null
   return Math.round(props.sensor.current.temperature)
 })
 
-/** Format the last-updated timestamp. */
+/** Format the last-updated timestamp in Mountain Time. */
 const lastUpdated = computed(() => {
   if (!props.sensor.current?.timestamp) return ''
-  const d = new Date(props.sensor.current.timestamp)
-  return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  return formatTime(props.sensor.current.timestamp)
 })
 </script>
 
@@ -63,7 +70,7 @@ const lastUpdated = computed(() => {
       </div>
     </div>
 
-    <!-- Metric groups — each metric has a header row, then stacked 12h/24h bars -->
+    <!-- Metric groups — each metric has a header row, range bars, and chart -->
     <div class="metric-list" v-if="availableMetrics.length">
       <div
         v-for="metric in availableMetrics"
@@ -99,13 +106,27 @@ const lastUpdated = computed(() => {
             :precision="metric.precision"
           />
         </div>
+
+        <!-- 7-day sparkline chart -->
+        <div
+          class="metric-chart"
+          v-if="hasTimeSeries(metric)"
+        >
+          <span class="period-label chart-label">7d</span>
+          <SparklineChart
+            :data="sensor.time_series[metric.key as keyof SensorTimeSeries]!"
+            :color="metric.color"
+            :unit="metric.unit"
+            :precision="metric.precision"
+          />
+        </div>
       </div>
     </div>
 
     <!-- Footer -->
     <div class="card-footer">
       <span v-if="lastUpdated">Updated {{ lastUpdated }}</span>
-      <span>{{ sensor.reading_count }} readings</span>
+      <span>{{ sensor.reading_count }} readings (7d)</span>
     </div>
   </div>
 </template>
@@ -194,6 +215,18 @@ const lastUpdated = computed(() => {
   width: 1.8rem;
   flex-shrink: 0;
   text-align: right;
+}
+
+/* Chart row: same layout as bar rows */
+.metric-chart {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin-top: 0.15rem;
+}
+
+.chart-label {
+  padding-top: 0.2rem;
 }
 
 /* ── Footer ───────────────────────────────────────────────────────────── */

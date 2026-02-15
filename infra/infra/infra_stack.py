@@ -122,8 +122,28 @@ class WolfCreekPassStack(Stack):
         )
 
         # ---- Reolink API Lambda ----
-        # Lightweight Lambda that queries reolink-snapshots and sensorpush-readings
-        # DynamoDB tables (same account, us-east-1) and returns JSON to the frontend.
+        # Lightweight Lambda that queries reolink-snapshots DynamoDB for camera
+        # snapshots and calls the SensorPush Cloud API directly for sensor data.
+
+        # SSM parameters for SensorPush credentials
+        # After deploy, set real values:
+        #   aws ssm put-parameter --name /wolf-creek-pass/sensorpush-email --value YOUR_EMAIL --type String --overwrite
+        #   aws ssm put-parameter --name /wolf-creek-pass/sensorpush-password --value YOUR_PASS --type SecureString --overwrite
+        sp_email_param = ssm.StringParameter(
+            self,
+            "SensorPushEmailParam",
+            parameter_name="/wolf-creek-pass/sensorpush-email",
+            string_value="REPLACE_ME",
+            description="SensorPush account email",
+        )
+        sp_password_param = ssm.StringParameter(
+            self,
+            "SensorPushPasswordParam",
+            parameter_name="/wolf-creek-pass/sensorpush-password",
+            string_value="REPLACE_ME",
+            description="SensorPush account password",
+        )
+
         reolink_fn = lambda_.Function(
             self,
             "ReolinkApiFn",
@@ -131,23 +151,23 @@ class WolfCreekPassStack(Stack):
             runtime=lambda_.Runtime.PYTHON_3_12,
             handler="handler.handler",
             code=lambda_.Code.from_asset("../reolink_api"),
-            timeout=Duration.seconds(15),
+            timeout=Duration.seconds(30),
             memory_size=128,
             environment={
                 "REOLINK_TABLE": "reolink-snapshots",
                 "REOLINK_BUCKET": "rl-snapshots",
-                "SENSORPUSH_TABLE": "sensorpush-readings",
                 "AWS_DEFAULT_REGION": "us-east-1",
+                "SENSORPUSH_EMAIL": sp_email_param.string_value,
+                "SENSORPUSH_PASSWORD": sp_password_param.string_value,
             },
         )
 
-        # Grant read access to reolink-snapshots and sensorpush-readings tables
+        # Grant read access to reolink-snapshots table only
         reolink_fn.add_to_role_policy(
             iam.PolicyStatement(
                 actions=["dynamodb:Query"],
                 resources=[
                     f"arn:aws:dynamodb:us-east-1:{self.account}:table/reolink-snapshots",
-                    f"arn:aws:dynamodb:us-east-1:{self.account}:table/sensorpush-readings",
                 ],
             )
         )

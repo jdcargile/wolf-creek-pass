@@ -2,7 +2,7 @@
 Lambda handler for the Wolf Creek Pass cabin dashboard API.
 
 Serves two endpoints via query parameter routing:
-  ?action=sensorpush  — SensorPush sensor readings with 12h/24h min/max ranges
+  ?action=sensorpush  — SensorPush sensor readings (direct API, 7-day history)
   (default)           — Reolink camera snapshots for a given date
 
 Designed to be called via Lambda Function URL.
@@ -11,13 +11,20 @@ Designed to be called via Lambda Function URL.
 from __future__ import annotations
 
 import json
+import logging
 import os
+import time
+import urllib.request
+import urllib.error
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
 import boto3
 from boto3.dynamodb.conditions import Key
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 # ── Camera name mapping ──────────────────────────────────────────────────────
 CAMERAS: dict[str, str] = {
@@ -35,8 +42,6 @@ SENSORS: dict[str, str] = {
     "16868601.1531727881802074019": "Cabin Basement",
 }
 
-# Metrics to extract from each reading.  Only metrics present in the item
-# are included (e.g. Cabin Main has no barometric_pressure).
 SENSOR_METRICS = [
     "temperature",
     "humidity",
@@ -47,9 +52,10 @@ SENSOR_METRICS = [
 
 # ── Environment ──────────────────────────────────────────────────────────────
 REOLINK_TABLE = os.environ.get("REOLINK_TABLE", "reolink-snapshots")
-SENSORPUSH_TABLE = os.environ.get("SENSORPUSH_TABLE", "sensorpush-readings")
 BUCKET_NAME = os.environ.get("REOLINK_BUCKET", "rl-snapshots")
 AWS_REGION = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
+SENSORPUSH_EMAIL = os.environ.get("SENSORPUSH_EMAIL", "")
+SENSORPUSH_PASSWORD = os.environ.get("SENSORPUSH_PASSWORD", "")
 
 CORS_HEADERS = {
     "Content-Type": "application/json",
@@ -157,50 +163,218 @@ def _handle_reolink(params: dict) -> dict:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# SensorPush readings
+# SensorPush — direct API access (no DynamoDB)
 # ═════════════════════════════════════════════════════════════════════════════
+
+_SP_BASE = "https://api.sensorpush.com/api/v1"
+_SP_HEADERS = {
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+}
+
+# Module-level token cache (persists across Lambda container invocations)
+_sp_access_token: str | None = None
+_sp_token_expiry: float = 0
+
+
+def _sp_post(url: str, body: dict, headers: dict, timeout: int = 15) -> dict | None:
+    """POST JSON to a URL, return parsed JSON or None on failure."""
+    data = json.dumps(body).encode()
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode())
+    except (urllib.error.URLError, json.JSONDecodeError, OSError) as exc:
+        logger.warning("SensorPush POST %s failed: %s", url, exc)
+        return None
+
+
+def _sp_authorize() -> str | None:
+    """Exchange credentials for an authorization code."""
+    data = _sp_post(
+        f"{_SP_BASE}/oauth/authorize",
+        {"email": SENSORPUSH_EMAIL, "password": SENSORPUSH_PASSWORD},
+        _SP_HEADERS,
+    )
+    if data:
+        return data.get("authorization")
+    return None
+
+
+def _sp_get_token(auth_code: str) -> str | None:
+    """Exchange auth code for an access token."""
+    data = _sp_post(
+        f"{_SP_BASE}/oauth/accesstoken",
+        {"authorization": auth_code},
+        _SP_HEADERS,
+    )
+    if data:
+        return data.get("accesstoken")
+    return None
+
+
+def _sp_ensure_token() -> str | None:
+    """Ensure we have a valid SensorPush access token, refreshing if needed."""
+    global _sp_access_token, _sp_token_expiry
+
+    if _sp_access_token and time.time() < _sp_token_expiry:
+        return _sp_access_token
+
+    logger.info("SensorPush: refreshing access token")
+    auth_code = _sp_authorize()
+    if not auth_code:
+        logger.warning("SensorPush: failed to get authorization code")
+        return None
+
+    token = _sp_get_token(auth_code)
+    if not token:
+        logger.warning("SensorPush: failed to get access token")
+        return None
+
+    _sp_access_token = token
+    # Token valid for 12 hours; refresh 5 minutes early
+    _sp_token_expiry = time.time() + (12 * 3600) - 300
+    return token
+
+
+def _sp_request(endpoint: str, body: dict) -> dict | None:
+    """Make an authenticated SensorPush API request with auto-retry on 401."""
+    token = _sp_ensure_token()
+    if not token:
+        return None
+
+    headers = {**_SP_HEADERS, "Authorization": token}
+    url = f"{_SP_BASE}{endpoint}"
+
+    data = json.dumps(body).encode()
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as exc:
+        if exc.code == 401:
+            # Token revoked — retry once with fresh token
+            logger.info("SensorPush 401 on %s — re-authenticating", endpoint)
+            global _sp_access_token, _sp_token_expiry
+            _sp_access_token = None
+            _sp_token_expiry = 0
+            token = _sp_ensure_token()
+            if not token:
+                return None
+            headers = {**_SP_HEADERS, "Authorization": token}
+            req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+            try:
+                with urllib.request.urlopen(req, timeout=15) as resp2:
+                    return json.loads(resp2.read().decode())
+            except Exception as exc2:
+                logger.warning("SensorPush retry failed: %s", exc2)
+                return None
+        logger.warning("SensorPush API %s failed: %s", endpoint, exc)
+        return None
+    except (urllib.error.URLError, json.JSONDecodeError, OSError) as exc:
+        logger.warning("SensorPush API %s failed: %s", endpoint, exc)
+        return None
+
+
+def _sp_fetch_samples(sensor_ids: list[str], minutes: int) -> dict[str, list[dict]]:
+    """Fetch samples for the given sensors over the last N minutes.
+
+    The SensorPush /samples endpoint returns at most ~2500 samples per call.
+    With 2 sensors at 5-min intervals, 7 days ≈ 4032 samples, so we may
+    need to paginate.  Results are returned newest-first from the API.
+
+    Returns:
+        Dict mapping sensor_id → list of sample dicts (oldest first).
+    """
+    start_ts = (datetime.now(timezone.utc) - timedelta(minutes=minutes)).isoformat()
+    all_samples: dict[str, list[dict]] = {sid: [] for sid in sensor_ids}
+    last_ts: str | None = None
+    max_pages = 10  # safety limit
+
+    for _ in range(max_pages):
+        body: dict[str, Any] = {
+            "sensors": sensor_ids,
+            "startTime": start_ts,
+            "limit": 2500,
+        }
+        if last_ts:
+            body["stopTime"] = last_ts
+
+        data = _sp_request("/samples", body)
+        if not data:
+            break
+
+        sensors_data = data.get("sensors", {})
+        page_count = 0
+        for sid in sensor_ids:
+            samples = sensors_data.get(sid, [])
+            page_count += len(samples)
+            all_samples[sid].extend(samples)
+
+        # If we got fewer than the limit, we have all the data
+        total_returned = data.get("total_samples", page_count)
+        if page_count < 2500 or total_returned < 2500:
+            break
+
+        # Find the oldest timestamp in this page for pagination
+        oldest_in_page: str | None = None
+        for sid in sensor_ids:
+            samples = sensors_data.get(sid, [])
+            if samples:
+                ts = samples[-1].get("observed", "")
+                if oldest_in_page is None or ts < oldest_in_page:
+                    oldest_in_page = ts
+        if oldest_in_page:
+            last_ts = oldest_in_page
+        else:
+            break
+
+    # Sort each sensor's samples by observed timestamp (oldest first)
+    for sid in all_samples:
+        all_samples[sid].sort(key=lambda s: s.get("observed", ""))
+
+    return all_samples
 
 
 def _compute_ranges(
-    readings: list[dict], cutoff_12h: str, cutoff_24h: str
+    samples: list[dict], cutoff_12h: str, cutoff_24h: str
 ) -> tuple[dict | None, dict, dict]:
-    """Compute current reading, 12h ranges, and 24h ranges from a list of readings.
+    """Compute current reading, 12h ranges, and 24h ranges from samples.
 
     Returns (current, range_12h, range_24h).  Each range dict maps
     metric_name → {"min": float, "max": float}.  ``current`` is the latest
     reading dict or None when the list is empty.
     """
-    if not readings:
+    if not samples:
         return None, {}, {}
 
-    # Readings arrive sorted ascending by timestamp (DynamoDB sort key).
-    current_item = readings[-1]
-    current: dict[str, float] = {}
+    current_item = samples[-1]
+    current: dict[str, Any] = {"timestamp": current_item.get("observed", "")}
     for metric in SENSOR_METRICS:
         val = current_item.get(metric)
         if val is not None:
-            current[metric] = float(val) if isinstance(val, Decimal) else val
-    current["timestamp"] = current_item["timestamp"]
+            current[metric] = float(val)
 
     range_12h: dict[str, dict[str, float]] = {}
     range_24h: dict[str, dict[str, float]] = {}
 
-    for item in readings:
-        ts = item["timestamp"]
+    for item in samples:
+        ts = item.get("observed", "")
         for metric in SENSOR_METRICS:
             raw = item.get(metric)
             if raw is None:
                 continue
-            val = float(raw) if isinstance(raw, Decimal) else raw
+            val = float(raw)
 
-            # 24h range (all readings qualify)
-            if metric not in range_24h:
-                range_24h[metric] = {"min": val, "max": val}
-            else:
-                range_24h[metric]["min"] = min(range_24h[metric]["min"], val)
-                range_24h[metric]["max"] = max(range_24h[metric]["max"], val)
+            # 24h range
+            if ts >= cutoff_24h:
+                if metric not in range_24h:
+                    range_24h[metric] = {"min": val, "max": val}
+                else:
+                    range_24h[metric]["min"] = min(range_24h[metric]["min"], val)
+                    range_24h[metric]["max"] = max(range_24h[metric]["max"], val)
 
-            # 12h range (only readings within the 12h window)
+            # 12h range
             if ts >= cutoff_12h:
                 if metric not in range_12h:
                     range_12h[metric] = {"min": val, "max": val}
@@ -211,47 +385,78 @@ def _compute_ranges(
     return current, range_12h, range_24h
 
 
-def _handle_sensorpush(_params: dict) -> dict:
-    """Handle ?action=sensorpush — sensor readings with 12h/24h ranges."""
-    now = datetime.now(timezone.utc)
-    cutoff_24h = (now - timedelta(hours=24)).isoformat()
-    cutoff_12h = (now - timedelta(hours=12)).isoformat()
+def _downsample_series(samples: list[dict], max_points: int = 500) -> list[dict]:
+    """Downsample a time series to at most max_points for chart rendering.
 
-    dynamodb = boto3.resource("dynamodb", region_name=AWS_REGION)
-    table = dynamodb.Table(SENSORPUSH_TABLE)
+    Selects evenly-spaced points.  Always includes first and last.
+    """
+    n = len(samples)
+    if n <= max_points:
+        return samples
+
+    step = (n - 1) / (max_points - 1)
+    indices = {0, n - 1}
+    for i in range(1, max_points - 1):
+        indices.add(round(i * step))
+
+    return [samples[i] for i in sorted(indices)]
+
+
+def _build_time_series(samples: list[dict]) -> dict[str, list]:
+    """Build per-metric time series arrays for charting.
+
+    Returns:
+        Dict mapping metric → list of [timestamp_iso, value] pairs.
+        Also includes a "timestamps" key with the raw ISO timestamps.
+    """
+    series: dict[str, list] = {}
+    for metric in SENSOR_METRICS:
+        points = []
+        for s in samples:
+            val = s.get(metric)
+            if val is not None:
+                points.append([s.get("observed", ""), round(float(val), 2)])
+        if points:
+            series[metric] = points
+    return series
+
+
+def _handle_sensorpush(_params: dict) -> dict:
+    """Handle ?action=sensorpush — live sensor data from SensorPush API."""
+    if not SENSORPUSH_EMAIL or not SENSORPUSH_PASSWORD:
+        return _json_response(500, {"error": "SensorPush credentials not configured"})
+
+    sensor_ids = list(SENSORS.keys())
+
+    # Fetch 7 days of samples
+    seven_days_min = 7 * 24 * 60
+    all_samples = _sp_fetch_samples(sensor_ids, seven_days_min)
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    cutoff_24h = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    cutoff_12h = (datetime.now(timezone.utc) - timedelta(hours=12)).isoformat()
 
     sensors = []
     for sensor_id, display_name in SENSORS.items():
-        # Query readings from the last 24 hours
-        response = table.query(
-            KeyConditionExpression=(
-                Key("sensor_id").eq(sensor_id) & Key("timestamp").gte(cutoff_24h)
-            ),
-        )
-        readings = response.get("Items", [])
+        samples = all_samples.get(sensor_id, [])
 
-        # Paginate if needed (unlikely with 5-min intervals, but safe)
-        while response.get("LastEvaluatedKey"):
-            response = table.query(
-                KeyConditionExpression=(
-                    Key("sensor_id").eq(sensor_id) & Key("timestamp").gte(cutoff_24h)
-                ),
-                ExclusiveStartKey=response["LastEvaluatedKey"],
-            )
-            readings.extend(response.get("Items", []))
+        # Compute summary ranges from the full 7-day dataset
+        # (24h/12h filters are applied inside _compute_ranges)
+        current, range_12h, range_24h = _compute_ranges(samples, cutoff_12h, cutoff_24h)
 
-        current, range_12h, range_24h = _compute_ranges(
-            readings, cutoff_12h, cutoff_24h
-        )
+        # Build time series for graphs (downsampled for frontend perf)
+        chart_samples = _downsample_series(samples)
+        time_series = _build_time_series(chart_samples)
 
         sensors.append(
             {
                 "id": sensor_id,
                 "name": display_name,
                 "current": current,
-                "range_12h": _decimal_to_float(range_12h),
-                "range_24h": _decimal_to_float(range_24h),
-                "reading_count": len(readings),
+                "range_12h": range_12h,
+                "range_24h": range_24h,
+                "reading_count": len(samples),
+                "time_series": time_series,
             }
         )
 

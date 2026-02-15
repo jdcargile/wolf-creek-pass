@@ -11,14 +11,10 @@ function onSelect(event: globalThis.Event) {
   }
 }
 
+import { formatDateTime } from '@/utils/time'
+
 function formatCycleLabel(cycleId: string, cameras: number, snow: number): string {
-  const date = new Date(cycleId)
-  const label = date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  })
+  const label = formatDateTime(cycleId)
   const snowTag = snow > 0 ? ` -- ${snow} snow` : ''
   return `${label} (${cameras} cams${snowTag})`
 }

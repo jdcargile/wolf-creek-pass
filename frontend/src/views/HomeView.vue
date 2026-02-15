@@ -6,6 +6,7 @@ import RouteSelector from '@/components/RouteSelector.vue'
 import CycleSelector from '@/components/CycleSelector.vue'
 import RouteMap from '@/components/RouteMap.vue'
 import CameraCard from '@/components/CameraCard.vue'
+import { formatDateTime } from '@/utils/time'
 import SensorPushSection from '@/components/SensorPushSection.vue'
 import ReolinkSection from '@/components/ReolinkSection.vue'
 
@@ -172,7 +173,7 @@ onMounted(async () => {
     <!-- Footer -->
     <footer class="dashboard-footer">
       <span v-if="store.currentCycle">
-        🕐 Last updated: {{ new Date(store.currentCycle.cycle.completed_at).toLocaleString() }}
+        🕐 Last updated: {{ formatDateTime(store.currentCycle.cycle.completed_at) }}
       </span>
     </footer>
   </main>
