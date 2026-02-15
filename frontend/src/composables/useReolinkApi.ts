@@ -1,21 +1,30 @@
-/** Fetch helper for the Reolink snapshot API (Lambda Function URL). */
+/** Fetch helpers for the cabin dashboard API (Lambda Function URL). */
 
 import type { ReolinkResponse } from '@/types/reolink'
+import type { SensorPushResponse } from '@/types/sensorpush'
 
 const BASE_URL = import.meta.env.VITE_REOLINK_API_URL || ''
 
-export async function fetchReolinkSnapshots(date: string): Promise<ReolinkResponse> {
+function apiUrl(params: Record<string, string>): string {
   if (!BASE_URL) {
     throw new Error('VITE_REOLINK_API_URL is not configured')
   }
+  const qs = new URLSearchParams(params).toString()
+  return `${BASE_URL.replace(/\/+$/, '')}?${qs}`
+}
 
-  // Strip any trailing slash, append query param
-  const url = `${BASE_URL.replace(/\/+$/, '')}?date=${encodeURIComponent(date)}`
-  const resp = await fetch(url)
-
+export async function fetchReolinkSnapshots(date: string): Promise<ReolinkResponse> {
+  const resp = await fetch(apiUrl({ date }))
   if (!resp.ok) {
     throw new Error(`Reolink API error: ${resp.status} ${resp.statusText}`)
   }
+  return resp.json()
+}
 
+export async function fetchSensorPushData(): Promise<SensorPushResponse> {
+  const resp = await fetch(apiUrl({ action: 'sensorpush' }))
+  if (!resp.ok) {
+    throw new Error(`SensorPush API error: ${resp.status} ${resp.statusText}`)
+  }
   return resp.json()
 }

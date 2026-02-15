@@ -122,8 +122,8 @@ class WolfCreekPassStack(Stack):
         )
 
         # ---- Reolink API Lambda ----
-        # Lightweight Lambda that queries the reolink-snapshots DynamoDB table
-        # (in the same account, us-east-1) and returns snapshot metadata + S3 URLs.
+        # Lightweight Lambda that queries reolink-snapshots and sensorpush-readings
+        # DynamoDB tables (same account, us-east-1) and returns JSON to the frontend.
         reolink_fn = lambda_.Function(
             self,
             "ReolinkApiFn",
@@ -136,18 +136,19 @@ class WolfCreekPassStack(Stack):
             environment={
                 "REOLINK_TABLE": "reolink-snapshots",
                 "REOLINK_BUCKET": "rl-snapshots",
+                "SENSORPUSH_TABLE": "sensorpush-readings",
                 "AWS_DEFAULT_REGION": "us-east-1",
             },
         )
 
-        # Grant read access to the reolink-snapshots table (cross-stack reference by ARN)
-        reolink_table_arn = (
-            f"arn:aws:dynamodb:us-east-1:{self.account}:table/reolink-snapshots"
-        )
+        # Grant read access to reolink-snapshots and sensorpush-readings tables
         reolink_fn.add_to_role_policy(
             iam.PolicyStatement(
                 actions=["dynamodb:Query"],
-                resources=[reolink_table_arn],
+                resources=[
+                    f"arn:aws:dynamodb:us-east-1:{self.account}:table/reolink-snapshots",
+                    f"arn:aws:dynamodb:us-east-1:{self.account}:table/sensorpush-readings",
+                ],
             )
         )
 

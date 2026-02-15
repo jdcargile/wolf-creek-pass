@@ -6,6 +6,7 @@ import RouteSelector from '@/components/RouteSelector.vue'
 import CycleSelector from '@/components/CycleSelector.vue'
 import RouteMap from '@/components/RouteMap.vue'
 import CameraCard from '@/components/CameraCard.vue'
+import SensorPushSection from '@/components/SensorPushSection.vue'
 import ReolinkSection from '@/components/ReolinkSection.vue'
 
 const store = useCycleStore()
@@ -155,6 +156,9 @@ onMounted(async () => {
           />
         </div>
       </section>
+
+      <!-- Cabin sensors (SensorPush) -->
+      <SensorPushSection />
 
       <!-- Cabin cameras (Reolink) -->
       <ReolinkSection />

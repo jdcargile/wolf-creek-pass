@@ -1,15 +1,18 @@
 """
-Lambda handler for querying Reolink camera snapshots from DynamoDB.
+Lambda handler for the Wolf Creek Pass cabin dashboard API.
 
-Returns all camera snapshots for a given date, with S3 image URLs and
-detection/weather metadata.  Designed to be called via Lambda Function URL.
+Serves two endpoints via query parameter routing:
+  ?action=sensorpush  — SensorPush sensor readings with 12h/24h min/max ranges
+  (default)           — Reolink camera snapshots for a given date
+
+Designed to be called via Lambda Function URL.
 """
 
 from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
@@ -26,8 +29,25 @@ CAMERAS: dict[str, str] = {
     "cabin_east": "Cabin East",
 }
 
+# ── SensorPush sensor mapping ────────────────────────────────────────────────
+SENSORS: dict[str, str] = {
+    "16851853.10691625321892782031": "Cabin Main",
+    "16868601.1531727881802074019": "Cabin Basement",
+}
+
+# Metrics to extract from each reading.  Only metrics present in the item
+# are included (e.g. Cabin Main has no barometric_pressure).
+SENSOR_METRICS = [
+    "temperature",
+    "humidity",
+    "dewpoint",
+    "barometric_pressure",
+    "vpd",
+]
+
 # ── Environment ──────────────────────────────────────────────────────────────
-TABLE_NAME = os.environ.get("REOLINK_TABLE", "reolink-snapshots")
+REOLINK_TABLE = os.environ.get("REOLINK_TABLE", "reolink-snapshots")
+SENSORPUSH_TABLE = os.environ.get("SENSORPUSH_TABLE", "sensorpush-readings")
 BUCKET_NAME = os.environ.get("REOLINK_BUCKET", "rl-snapshots")
 AWS_REGION = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
 
@@ -39,7 +59,7 @@ CORS_HEADERS = {
 }
 
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
+# ── Shared helpers ───────────────────────────────────────────────────────────
 
 
 def _decimal_to_float(obj: Any) -> Any:
@@ -51,6 +71,19 @@ def _decimal_to_float(obj: Any) -> Any:
     if isinstance(obj, list):
         return [_decimal_to_float(i) for i in obj]
     return obj
+
+
+def _json_response(status: int, body: Any) -> dict:
+    return {
+        "statusCode": status,
+        "headers": CORS_HEADERS,
+        "body": json.dumps(body),
+    }
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Reolink snapshots
+# ═════════════════════════════════════════════════════════════════════════════
 
 
 def _image_url(s3_key: str) -> str:
@@ -102,23 +135,12 @@ def _query_camera(table: Any, camera_id: str, date_str: str) -> list[dict]:
     return sorted(snapshots, key=lambda s: s["timestamp"])
 
 
-# ── Lambda entry point ───────────────────────────────────────────────────────
-
-
-def handler(event: dict, context: Any) -> dict:
-    """Handle Lambda Function URL invocations."""
-    # OPTIONS preflight
-    http_method = event.get("requestContext", {}).get("http", {}).get("method", "GET")
-    if http_method == "OPTIONS":
-        return {"statusCode": 204, "headers": CORS_HEADERS, "body": ""}
-
-    # Parse query parameters
-    params = event.get("queryStringParameters") or {}
+def _handle_reolink(params: dict) -> dict:
+    """Handle ?action=reolink (or default) — camera snapshots by date."""
     date_str = _parse_date(params.get("date"))
 
-    # Query DynamoDB
     dynamodb = boto3.resource("dynamodb", region_name=AWS_REGION)
-    table = dynamodb.Table(TABLE_NAME)
+    table = dynamodb.Table(REOLINK_TABLE)
 
     cameras = []
     for camera_id, display_name in CAMERAS.items():
@@ -131,6 +153,127 @@ def handler(event: dict, context: Any) -> dict:
             }
         )
 
-    body = json.dumps({"date": date_str, "cameras": cameras})
+    return _json_response(200, {"date": date_str, "cameras": cameras})
 
-    return {"statusCode": 200, "headers": CORS_HEADERS, "body": body}
+
+# ═════════════════════════════════════════════════════════════════════════════
+# SensorPush readings
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+def _compute_ranges(
+    readings: list[dict], cutoff_12h: str, cutoff_24h: str
+) -> tuple[dict | None, dict, dict]:
+    """Compute current reading, 12h ranges, and 24h ranges from a list of readings.
+
+    Returns (current, range_12h, range_24h).  Each range dict maps
+    metric_name → {"min": float, "max": float}.  ``current`` is the latest
+    reading dict or None when the list is empty.
+    """
+    if not readings:
+        return None, {}, {}
+
+    # Readings arrive sorted ascending by timestamp (DynamoDB sort key).
+    current_item = readings[-1]
+    current: dict[str, float] = {}
+    for metric in SENSOR_METRICS:
+        val = current_item.get(metric)
+        if val is not None:
+            current[metric] = float(val) if isinstance(val, Decimal) else val
+    current["timestamp"] = current_item["timestamp"]
+
+    range_12h: dict[str, dict[str, float]] = {}
+    range_24h: dict[str, dict[str, float]] = {}
+
+    for item in readings:
+        ts = item["timestamp"]
+        for metric in SENSOR_METRICS:
+            raw = item.get(metric)
+            if raw is None:
+                continue
+            val = float(raw) if isinstance(raw, Decimal) else raw
+
+            # 24h range (all readings qualify)
+            if metric not in range_24h:
+                range_24h[metric] = {"min": val, "max": val}
+            else:
+                range_24h[metric]["min"] = min(range_24h[metric]["min"], val)
+                range_24h[metric]["max"] = max(range_24h[metric]["max"], val)
+
+            # 12h range (only readings within the 12h window)
+            if ts >= cutoff_12h:
+                if metric not in range_12h:
+                    range_12h[metric] = {"min": val, "max": val}
+                else:
+                    range_12h[metric]["min"] = min(range_12h[metric]["min"], val)
+                    range_12h[metric]["max"] = max(range_12h[metric]["max"], val)
+
+    return current, range_12h, range_24h
+
+
+def _handle_sensorpush(_params: dict) -> dict:
+    """Handle ?action=sensorpush — sensor readings with 12h/24h ranges."""
+    now = datetime.now(timezone.utc)
+    cutoff_24h = (now - timedelta(hours=24)).isoformat()
+    cutoff_12h = (now - timedelta(hours=12)).isoformat()
+
+    dynamodb = boto3.resource("dynamodb", region_name=AWS_REGION)
+    table = dynamodb.Table(SENSORPUSH_TABLE)
+
+    sensors = []
+    for sensor_id, display_name in SENSORS.items():
+        # Query readings from the last 24 hours
+        response = table.query(
+            KeyConditionExpression=(
+                Key("sensor_id").eq(sensor_id) & Key("timestamp").gte(cutoff_24h)
+            ),
+        )
+        readings = response.get("Items", [])
+
+        # Paginate if needed (unlikely with 5-min intervals, but safe)
+        while response.get("LastEvaluatedKey"):
+            response = table.query(
+                KeyConditionExpression=(
+                    Key("sensor_id").eq(sensor_id) & Key("timestamp").gte(cutoff_24h)
+                ),
+                ExclusiveStartKey=response["LastEvaluatedKey"],
+            )
+            readings.extend(response.get("Items", []))
+
+        current, range_12h, range_24h = _compute_ranges(
+            readings, cutoff_12h, cutoff_24h
+        )
+
+        sensors.append(
+            {
+                "id": sensor_id,
+                "name": display_name,
+                "current": current,
+                "range_12h": _decimal_to_float(range_12h),
+                "range_24h": _decimal_to_float(range_24h),
+                "reading_count": len(readings),
+            }
+        )
+
+    return _json_response(200, {"sensors": sensors})
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Lambda entry point
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+def handler(event: dict, context: Any) -> dict:
+    """Route requests based on the 'action' query parameter."""
+    # OPTIONS preflight
+    http_method = event.get("requestContext", {}).get("http", {}).get("method", "GET")
+    if http_method == "OPTIONS":
+        return {"statusCode": 204, "headers": CORS_HEADERS, "body": ""}
+
+    params = event.get("queryStringParameters") or {}
+    action = params.get("action", "reolink")
+
+    if action == "sensorpush":
+        return _handle_sensorpush(params)
+
+    return _handle_reolink(params)
