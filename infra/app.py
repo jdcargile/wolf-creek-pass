@@ -13,7 +13,7 @@ WolfCreekPassStack(
     "WolfCreekPassStack",
     env=cdk.Environment(
         account=os.getenv("CDK_DEFAULT_ACCOUNT"),
-        region=os.getenv("CDK_DEFAULT_REGION", "us-west-2"),
+        region=os.getenv("CDK_DEFAULT_REGION", "us-east-1"),
     ),
 )
 

@@ -5,6 +5,7 @@ Resources:
 - DynamoDB table (single-table design with GSI)
 - S3 bucket (images, JSON data, Vue static site)
 - Lambda function (capture cycle, container image)
+- Lambda function (Reolink API, zip deployment)
 - EventBridge rule (hourly cron trigger)
 - SSM parameters (API keys -- set real values via AWS CLI)
 - S3 deployment (Vue frontend static files)
@@ -120,6 +121,47 @@ class WolfCreekPassStack(Stack):
             targets=[targets.LambdaFunction(capture_fn)],
         )
 
+        # ---- Reolink API Lambda ----
+        # Lightweight Lambda that queries the reolink-snapshots DynamoDB table
+        # (in the same account, us-east-1) and returns snapshot metadata + S3 URLs.
+        reolink_fn = lambda_.Function(
+            self,
+            "ReolinkApiFn",
+            function_name="wolf-creek-reolink-api",
+            runtime=lambda_.Runtime.PYTHON_3_12,
+            handler="handler.handler",
+            code=lambda_.Code.from_asset("../reolink_api"),
+            timeout=Duration.seconds(15),
+            memory_size=128,
+            environment={
+                "REOLINK_TABLE": "reolink-snapshots",
+                "REOLINK_BUCKET": "rl-snapshots",
+                "AWS_DEFAULT_REGION": "us-east-1",
+            },
+        )
+
+        # Grant read access to the reolink-snapshots table (cross-stack reference by ARN)
+        reolink_table_arn = (
+            f"arn:aws:dynamodb:us-east-1:{self.account}:table/reolink-snapshots"
+        )
+        reolink_fn.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=["dynamodb:Query"],
+                resources=[reolink_table_arn],
+            )
+        )
+
+        # Function URL (public HTTPS endpoint with CORS -- no API Gateway needed)
+        reolink_url = reolink_fn.add_function_url(
+            auth_type=lambda_.FunctionUrlAuthType.NONE,
+            cors=lambda_.FunctionUrlCorsOptions(
+                allowed_origins=["*"],
+                allowed_methods=[lambda_.HttpMethod.GET],
+                allowed_headers=["Content-Type"],
+                max_age=Duration.hours(24),
+            ),
+        )
+
         # ---- Vue Frontend Deployment ----
         # Deploy built Vue assets to S3 under the root prefix
         # Build frontend first: cd frontend && npm run build
@@ -152,4 +194,11 @@ class WolfCreekPassStack(Stack):
             "TableName",
             value=table.table_name,
             description="DynamoDB table name",
+        )
+
+        CfnOutput(
+            self,
+            "ReolinkApiUrl",
+            value=reolink_url.url,
+            description="Reolink API Lambda Function URL",
         )

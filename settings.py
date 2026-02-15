@@ -48,6 +48,7 @@ ROUTES: list[RouteConfig] = [
             90912,  # I-80 EB @ Parley's Summit / MP 139.24
             90544,  # SR-35 RWIS @ Wolf Creek / MP 9.92
             90779,  # SR-35 RWIS EB @ Wolf Creek Pass / MP 19.33
+            90817,  # SR-208 @ MP 7.68 (Duchesne area)
         ],
         pass_ids=[
             9,  # I-80 Parley's Summit (7016')
@@ -122,7 +123,7 @@ class Settings(BaseSettings):
         default=None,
         description="AWS endpoint URL (set to http://localhost:4566 for LocalStack)",
     )
-    aws_default_region: str = PydanticField(default="us-west-2")
+    aws_default_region: str = PydanticField(default="us-east-1")
     table_name: str = PydanticField(
         default="wolf-creek-pass", description="DynamoDB table name"
     )
