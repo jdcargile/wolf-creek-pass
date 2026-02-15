@@ -12,7 +12,6 @@ const props = defineProps<{
 function readCurrent(key: keyof SensorRanges): number | undefined {
   const c = props.sensor.current
   if (!c) return undefined
-  // Keys on SensorCurrent match SensorRanges (temperature, humidity, …)
   return c[key as keyof SensorCurrent] as number | undefined
 }
 
@@ -31,6 +30,13 @@ const availableMetrics = computed<MetricConfig[]>(() =>
 function currentVal(metric: MetricConfig): number | null {
   const val = readCurrent(metric.key)
   return val !== undefined ? val : null
+}
+
+/** Format a current value with its unit. */
+function fmtCurrent(metric: MetricConfig): string {
+  const val = currentVal(metric)
+  if (val === null) return '--'
+  return `${val.toFixed(metric.precision)}${metric.unit}`
 }
 
 /** Format the primary current reading (temperature). */
@@ -57,46 +63,41 @@ const lastUpdated = computed(() => {
       </div>
     </div>
 
-    <!-- Metric rows with 12h / 24h range bars -->
-    <div class="metric-table" v-if="availableMetrics.length">
-      <!-- Column headers -->
-      <div class="metric-row metric-row--header">
-        <span class="metric-label"></span>
-        <span class="metric-period">12h</span>
-        <span class="metric-period">24h</span>
-      </div>
-
+    <!-- Metric groups — each metric has a header row, then stacked 12h/24h bars -->
+    <div class="metric-list" v-if="availableMetrics.length">
       <div
         v-for="metric in availableMetrics"
         :key="metric.key"
-        class="metric-row"
+        class="metric-group"
       >
-        <span class="metric-label">{{ metric.label }}</span>
+        <!-- Metric header: label + current value -->
+        <div class="metric-header">
+          <span class="metric-label">{{ metric.label }}</span>
+          <span class="metric-current">{{ fmtCurrent(metric) }}</span>
+        </div>
 
-        <!-- 12h range bar -->
-        <div class="metric-bar">
+        <!-- 12h bar -->
+        <div class="metric-bar-row" v-if="sensor.range_12h[metric.key]">
+          <span class="period-label">12h</span>
           <MetricRangeBar
-            v-if="sensor.range_12h[metric.key]"
             :min="sensor.range_12h[metric.key]!.min"
             :max="sensor.range_12h[metric.key]!.max"
             :current="currentVal(metric) ?? sensor.range_12h[metric.key]!.max"
             :unit="metric.unit"
             :precision="metric.precision"
           />
-          <span v-else class="metric-na">--</span>
         </div>
 
-        <!-- 24h range bar -->
-        <div class="metric-bar">
+        <!-- 24h bar -->
+        <div class="metric-bar-row" v-if="sensor.range_24h[metric.key]">
+          <span class="period-label">24h</span>
           <MetricRangeBar
-            v-if="sensor.range_24h[metric.key]"
             :min="sensor.range_24h[metric.key]!.min"
             :max="sensor.range_24h[metric.key]!.max"
             :current="currentVal(metric) ?? sensor.range_24h[metric.key]!.max"
             :unit="metric.unit"
             :precision="metric.precision"
           />
-          <span v-else class="metric-na">--</span>
         </div>
       </div>
     </div>
@@ -143,23 +144,25 @@ const lastUpdated = computed(() => {
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Metric table ─────────────────────────────────────────────────────── */
+/* ── Metric list ──────────────────────────────────────────────────────── */
 
-.metric-table {
+.metric-list {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.6rem;
 }
 
-.metric-row {
-  display: grid;
-  grid-template-columns: 5.5rem 1fr 1fr;
-  align-items: center;
-  gap: 0.5rem;
+.metric-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
 }
 
-.metric-row--header {
-  margin-bottom: 0.1rem;
+/* Metric header: label on left, current value on right */
+.metric-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
 }
 
 .metric-label {
@@ -168,24 +171,29 @@ const lastUpdated = computed(() => {
   font-weight: 500;
 }
 
-.metric-period {
-  font-size: 0.6rem;
+.metric-current {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Bar row: period label + full-width range bar */
+.metric-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.period-label {
+  font-size: 0.55rem;
   font-weight: 600;
   color: var(--color-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  text-align: center;
-}
-
-.metric-bar {
-  min-width: 0;
-}
-
-.metric-na {
-  font-size: 0.65rem;
-  color: var(--color-text-muted);
-  text-align: center;
-  display: block;
+  letter-spacing: 0.04em;
+  width: 1.8rem;
+  flex-shrink: 0;
+  text-align: right;
 }
 
 /* ── Footer ───────────────────────────────────────────────────────────── */
