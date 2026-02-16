@@ -466,25 +466,39 @@ def _build_sensor_response(include_history: bool) -> dict:
     """
     sensor_ids = list(SENSORS.keys())
 
-    if include_history:
-        all_samples = _sp_fetch_samples(sensor_ids, days=7)
-    else:
-        # Summary mode: fetch only the latest reading per sensor
-        data = _sp_request(
-            "/samples",
-            {
-                "sensors": sensor_ids,
-                "limit": 1,
-                "measures": SENSOR_METRICS,
-            },
-        )
-        all_samples = {}
-        if data:
-            for sid in sensor_ids:
-                all_samples[sid] = data.get("sensors", {}).get(sid, [])
-        else:
-            for sid in sensor_ids:
-                all_samples[sid] = []
+    if not include_history:
+        # ── Summary mode — just the latest reading per sensor ────────────
+        data = _sp_request("/samples", {"sensors": sensor_ids, "limit": 1})
+        sensors = []
+        for sensor_id, display_name in SENSORS.items():
+            raw_samples = data.get("sensors", {}).get(sensor_id, []) if data else []
+            logger.info("SensorPush summary %s: %s", display_name, raw_samples)
+
+            current = None
+            if raw_samples:
+                s = raw_samples[-1]
+                current = {"timestamp": s.get("observed", "")}
+                for metric in SENSOR_METRICS:
+                    val = s.get(metric)
+                    if val is not None:
+                        current[metric] = float(val)
+
+            sensors.append(
+                {
+                    "id": sensor_id,
+                    "name": display_name,
+                    "current": current,
+                    "range_12h": {},
+                    "range_24h": {},
+                    "avg_24h": {},
+                    "reading_count": 0,
+                    "time_series": {},
+                }
+            )
+        return {"sensors": sensors}
+
+    # ── History mode — full 7-day fetch with ranges + charts ─────────────
+    all_samples = _sp_fetch_samples(sensor_ids, days=7)
 
     cutoff_24h = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
     cutoff_12h = (datetime.now(timezone.utc) - timedelta(hours=12)).isoformat()
@@ -498,7 +512,7 @@ def _build_sensor_response(include_history: bool) -> dict:
         )
 
         time_series: dict[str, list] = {}
-        if include_history and samples:
+        if samples:
             chart_samples = _downsample_series(samples)
             time_series = _build_time_series(chart_samples)
 
