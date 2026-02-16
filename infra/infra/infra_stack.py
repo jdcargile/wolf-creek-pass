@@ -144,6 +144,25 @@ class WolfCreekPassStack(Stack):
             description="SensorPush account password",
         )
 
+        # SSM parameters for dashboard auth
+        # After deploy, set real values:
+        #   aws ssm put-parameter --name /wolf-creek-pass/auth-passphrase-hash --value HASH --type String --overwrite
+        #   aws ssm put-parameter --name /wolf-creek-pass/auth-signing-key --value KEY --type SecureString --overwrite
+        auth_hash_param = ssm.StringParameter(
+            self,
+            "AuthPassphraseHashParam",
+            parameter_name="/wolf-creek-pass/auth-passphrase-hash",
+            string_value="REPLACE_ME",
+            description="SHA-256 hex hash of the dashboard passphrase",
+        )
+        auth_key_param = ssm.StringParameter(
+            self,
+            "AuthSigningKeyParam",
+            parameter_name="/wolf-creek-pass/auth-signing-key",
+            string_value="REPLACE_ME",
+            description="HMAC signing key for auth tokens",
+        )
+
         reolink_fn = lambda_.Function(
             self,
             "ReolinkApiFn",
@@ -159,6 +178,8 @@ class WolfCreekPassStack(Stack):
                 "AWS_DEFAULT_REGION": "us-east-1",
                 "SENSORPUSH_EMAIL": sp_email_param.string_value,
                 "SENSORPUSH_PASSWORD": sp_password_param.string_value,
+                "AUTH_PASSPHRASE_HASH": auth_hash_param.string_value,
+                "AUTH_SIGNING_KEY": auth_key_param.string_value,
             },
         )
 

@@ -10,9 +10,12 @@ Designed to be called via Lambda Function URL.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import logging
 import os
+import secrets
 import time
 import urllib.request
 import urllib.error
@@ -59,12 +62,15 @@ BUCKET_NAME = os.environ.get("REOLINK_BUCKET", "rl-snapshots")
 AWS_REGION = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
 SENSORPUSH_EMAIL = os.environ.get("SENSORPUSH_EMAIL", "")
 SENSORPUSH_PASSWORD = os.environ.get("SENSORPUSH_PASSWORD", "")
+AUTH_PASSPHRASE_HASH = os.environ.get("AUTH_PASSPHRASE_HASH", "")
+AUTH_SIGNING_KEY = os.environ.get("AUTH_SIGNING_KEY", "")
+AUTH_DISABLED = os.environ.get("AUTH_DISABLED", "") == "1"
 
 CORS_HEADERS = {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
 }
 
 
@@ -594,6 +600,85 @@ def _handle_sensorpush(params: dict) -> dict:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
+# Authentication
+# ═════════════════════════════════════════════════════════════════════════════
+
+_TOKEN_EXPIRY_SECONDS = 2 * 365 * 24 * 3600  # 2 years
+
+
+def _generate_token() -> str:
+    """Generate an HMAC-signed auth token with embedded expiry.
+
+    Token format: ``<expiry_hex>.<hmac_hex>``
+    Stateless — can be verified with just the signing key.
+    """
+    expiry = int(time.time()) + _TOKEN_EXPIRY_SECONDS
+    expiry_hex = format(expiry, "x")
+    sig = hmac.new(
+        AUTH_SIGNING_KEY.encode(), expiry_hex.encode(), hashlib.sha256
+    ).hexdigest()
+    return f"{expiry_hex}.{sig}"
+
+
+def _verify_token(token: str) -> bool:
+    """Verify an HMAC-signed auth token. Returns True if valid + not expired."""
+    if not AUTH_SIGNING_KEY:
+        return False
+    parts = token.split(".", 1)
+    if len(parts) != 2:
+        return False
+    expiry_hex, provided_sig = parts
+    try:
+        expiry = int(expiry_hex, 16)
+    except ValueError:
+        return False
+    if time.time() > expiry:
+        return False
+    expected_sig = hmac.new(
+        AUTH_SIGNING_KEY.encode(), expiry_hex.encode(), hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(provided_sig, expected_sig)
+
+
+def _extract_token(event: dict) -> str | None:
+    """Extract Bearer token from the Authorization header."""
+    headers = event.get("headers") or {}
+    auth = headers.get("authorization", "")
+    if auth.lower().startswith("bearer "):
+        return auth[7:].strip()
+    return None
+
+
+def _handle_auth(event: dict) -> dict:
+    """Handle ?action=auth — verify passphrase and return a session token."""
+    if not AUTH_PASSPHRASE_HASH or not AUTH_SIGNING_KEY:
+        return _json_response(500, {"error": "Auth not configured"})
+
+    # Parse the request body for the passphrase
+    body_str = event.get("body", "") or ""
+    try:
+        body = json.loads(body_str)
+    except (json.JSONDecodeError, TypeError):
+        return _json_response(400, {"error": "Invalid request body"})
+
+    passphrase = body.get("passphrase", "")
+    if not passphrase:
+        return _json_response(400, {"error": "Passphrase required"})
+
+    # Hash and compare (timing-safe)
+    provided_hash = hashlib.sha256(passphrase.encode()).hexdigest()
+    if not hmac.compare_digest(provided_hash, AUTH_PASSPHRASE_HASH):
+        logger.warning("Auth: invalid passphrase attempt")
+        return _json_response(401, {"error": "Invalid passphrase"})
+
+    token = _generate_token()
+    logger.info(
+        "Auth: token issued (expires in %d days)", _TOKEN_EXPIRY_SECONDS // 86400
+    )
+    return _json_response(200, {"token": token})
+
+
+# ═════════════════════════════════════════════════════════════════════════════
 # Lambda entry point
 # ═════════════════════════════════════════════════════════════════════════════
 
@@ -607,6 +692,16 @@ def handler(event: dict, context: Any) -> dict:
 
     params = event.get("queryStringParameters") or {}
     action = params.get("action", "reolink")
+
+    # Auth action — no token required
+    if action == "auth":
+        return _handle_auth(event)
+
+    # All other actions require a valid token (unless auth is disabled for dev)
+    if not AUTH_DISABLED:
+        token = _extract_token(event)
+        if not token or not _verify_token(token):
+            return _json_response(401, {"error": "Unauthorized"})
 
     if action == "sensorpush":
         return _handle_sensorpush(params)
