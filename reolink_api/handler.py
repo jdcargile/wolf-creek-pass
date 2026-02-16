@@ -19,12 +19,15 @@ import urllib.error
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import boto3
 from boto3.dynamodb.conditions import Key
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+MOUNTAIN_TZ = ZoneInfo("America/Denver")
 
 # ── Camera name mapping ──────────────────────────────────────────────────────
 CAMERAS: dict[str, str] = {
@@ -97,30 +100,46 @@ def _image_url(s3_key: str) -> str:
     return f"https://{BUCKET_NAME}.s3.amazonaws.com/{s3_key}"
 
 
-def _parse_date(raw: str | None) -> str:
-    """Validate and return a YYYY-MM-DD date string, defaulting to today UTC."""
+def _parse_date(raw: str | None) -> tuple[str, str, str]:
+    """Convert a YYYY-MM-DD Mountain Time date to UTC query boundaries.
+
+    Returns (date_str, utc_start, utc_end) where utc_start/utc_end are
+    ISO timestamps covering midnight-to-midnight Mountain Time in UTC.
+    Handles MST/MDT automatically via zoneinfo.
+    """
     if raw:
         try:
-            datetime.strptime(raw, "%Y-%m-%d")
-            return raw
+            dt = datetime.strptime(raw, "%Y-%m-%d")
         except ValueError:
-            pass
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            dt = datetime.now(MOUNTAIN_TZ)
+    else:
+        dt = datetime.now(MOUNTAIN_TZ)
+
+    date_str = dt.strftime("%Y-%m-%d")
+
+    # Mountain Time midnight → UTC
+    mt_start = datetime(dt.year, dt.month, dt.day, 0, 0, 0, tzinfo=MOUNTAIN_TZ)
+    mt_end = datetime(dt.year, dt.month, dt.day, 23, 59, 59, tzinfo=MOUNTAIN_TZ)
+
+    utc_start = mt_start.astimezone(timezone.utc).isoformat()
+    utc_end = mt_end.astimezone(timezone.utc).isoformat()
+
+    return date_str, utc_start, utc_end
 
 
-def _query_camera(table: Any, camera_id: str, date_str: str) -> list[dict] | None:
-    """Query all snapshots for a single camera on a given date.
+def _query_camera(
+    table: Any, camera_id: str, utc_start: str, utc_end: str
+) -> list[dict] | None:
+    """Query all snapshots for a single camera within a UTC time range.
 
     Returns None if the table is unreachable (missing, auth error, etc.),
     or a (possibly empty) list of snapshot dicts on success.
     """
-    start_ts = f"{date_str}T00:00:00"
-    end_ts = f"{date_str}T23:59:59+99:99"
-
     try:
         response = table.query(
             KeyConditionExpression=(
-                Key("camera").eq(camera_id) & Key("timestamp").between(start_ts, end_ts)
+                Key("camera").eq(camera_id)
+                & Key("timestamp").between(utc_start, utc_end)
             ),
         )
     except Exception as exc:
@@ -150,8 +169,16 @@ def _query_camera(table: Any, camera_id: str, date_str: str) -> list[dict] | Non
 
 
 def _handle_reolink(params: dict) -> dict:
-    """Handle ?action=reolink (or default) — camera snapshots by date."""
-    date_str = _parse_date(params.get("date"))
+    """Handle ?action=reolink (or default) — camera snapshots by date.
+
+    The ``date`` query param is interpreted as a Mountain Time date.
+    Query boundaries are converted to UTC so evening snapshots (after
+    midnight UTC) are included.
+    """
+    date_str, utc_start, utc_end = _parse_date(params.get("date"))
+    logger.info(
+        "Reolink query: date=%s  utc_range=[%s, %s]", date_str, utc_start, utc_end
+    )
 
     dynamodb = boto3.resource("dynamodb", region_name=AWS_REGION)
     table = dynamodb.Table(REOLINK_TABLE)
@@ -160,7 +187,7 @@ def _handle_reolink(params: dict) -> dict:
     camera_ids = list(CAMERAS.items())
     cameras = []
     first_id, first_name = camera_ids[0]
-    first_snapshots = _query_camera(table, first_id, date_str)
+    first_snapshots = _query_camera(table, first_id, utc_start, utc_end)
     if first_snapshots is None:
         # Table unreachable — return empty results for all cameras
         for camera_id, display_name in camera_ids:
@@ -169,7 +196,7 @@ def _handle_reolink(params: dict) -> dict:
 
     cameras.append({"id": first_id, "name": first_name, "snapshots": first_snapshots})
     for camera_id, display_name in camera_ids[1:]:
-        snapshots = _query_camera(table, camera_id, date_str)
+        snapshots = _query_camera(table, camera_id, utc_start, utc_end)
         cameras.append(
             {
                 "id": camera_id,
