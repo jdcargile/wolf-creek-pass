@@ -15,7 +15,7 @@ onMounted(async () => {
 
 <template>
   <section class="sensorpush-section">
-    <h2>Cabin Sensors</h2>
+    <h2>🌡️ Cabin Sensors</h2>
 
     <!-- Loading (initial summary) -->
     <div v-if="store.loading" class="sp-status">Loading sensor data...</div>

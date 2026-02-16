@@ -77,9 +77,12 @@ export const useReolinkStore = defineStore('reolink', () => {
       cameras.value = data.cameras
       selectedDate.value = data.date
 
-      // Default to the latest available hour
+      // Start from the earliest hour and auto-play
       const hours = availableHours.value
-      selectedHour.value = hours.length > 0 ? hours[hours.length - 1]! : null
+      selectedHour.value = hours.length > 0 ? hours[0]! : null
+      if (hours.length > 1) {
+        togglePlay()
+      }
     } catch (e: any) {
       error.value = e.message || 'Failed to load cabin cameras'
       cameras.value = []
@@ -90,6 +93,7 @@ export const useReolinkStore = defineStore('reolink', () => {
   }
 
   function setHour(hour: number) {
+    if (playing.value) stopPlay()
     selectedHour.value = hour
   }
 
@@ -119,26 +123,11 @@ export const useReolinkStore = defineStore('reolink', () => {
 
   function togglePlay() {
     if (playing.value) {
-      playing.value = false
-      if (playTimer) {
-        clearInterval(playTimer)
-        playTimer = null
-      }
+      stopPlay()
     } else {
       playing.value = true
       playTimer = setInterval(() => {
-        const hours = availableHours.value
-        const idx = hours.indexOf(selectedHour.value ?? -1)
-        if (idx >= hours.length - 1) {
-          // Reached end — stop
-          playing.value = false
-          if (playTimer) {
-            clearInterval(playTimer)
-            playTimer = null
-          }
-        } else {
-          nextHour()
-        }
+        nextHour() // wraps around to first hour at end
       }, 1500)
     }
   }

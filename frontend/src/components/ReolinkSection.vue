@@ -36,11 +36,6 @@ function nextDay() {
   }
 }
 
-/** Weather summary for the selected time. */
-function fmtTemp(t: number | undefined): string {
-  return t !== undefined ? `${Math.round(t)}` : '--'
-}
-
 /** Stop playback when component is unmounted. */
 watch(
   () => store.playing,
@@ -53,7 +48,7 @@ watch(
   <section class="reolink-section">
     <!-- Section header -->
     <div class="section-header">
-      <h2>Cabin Cameras</h2>
+      <h2>🏠 Cabin Cameras</h2>
       <div class="date-controls">
         <button class="date-nav" @click="prevDay" title="Previous day" aria-label="Previous day">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
@@ -91,25 +86,6 @@ watch(
 
     <!-- Content -->
     <template v-else-if="store.hasData">
-      <!-- Weather summary bar -->
-      <div v-if="store.weatherAtSelectedTime" class="weather-bar">
-        <span class="weather-item">
-          {{ fmtTemp(store.weatherAtSelectedTime.temperature_f) }}°F
-        </span>
-        <span v-if="store.weatherAtSelectedTime.weather_description" class="weather-item weather-item--desc">
-          {{ store.weatherAtSelectedTime.weather_description }}
-        </span>
-        <span v-if="store.weatherAtSelectedTime.wind_speed_mph" class="weather-item">
-          Wind {{ Math.round(store.weatherAtSelectedTime.wind_speed_mph!) }} mph
-        </span>
-        <span v-if="store.weatherAtSelectedTime.snowfall_in" class="weather-item">
-          Snow {{ store.weatherAtSelectedTime.snowfall_in }}"
-        </span>
-        <span v-if="store.weatherAtSelectedTime.cloud_cover_pct !== undefined" class="weather-item">
-          Cloud {{ Math.round(store.weatherAtSelectedTime.cloud_cover_pct!) }}%
-        </span>
-      </div>
-
       <!-- Time slider -->
       <ReolinkTimeSlider />
 
@@ -204,30 +180,6 @@ watch(
 
 .date-picker:focus {
   border-color: var(--color-info);
-}
-
-/* ── Weather bar ──────────────────────────────────────────────────────── */
-
-.weather-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1rem;
-  padding: 0.5rem 0.75rem;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-}
-
-.weather-item:first-child {
-  font-weight: 600;
-  font-size: 0.85rem;
-  color: var(--color-text);
-}
-
-.weather-item--desc {
-  font-style: italic;
 }
 
 /* ── Camera grid ──────────────────────────────────────────────────────── */

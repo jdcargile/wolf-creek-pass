@@ -60,6 +60,51 @@ onMounted(async () => {
       <!-- Interactive map -->
       <RouteMap />
 
+      <!-- Traffic cameras -->
+      <section class="cameras-section">
+        <h2>📸 Cameras ({{ store.currentCycle?.captures.length }})</h2>
+        <div class="camera-grid">
+          <CameraCard
+            v-for="capture in store.currentCycle?.captures"
+            :key="capture.camera_id"
+            :capture="capture"
+            @click="capture.latitude != null && capture.longitude != null && store.flyTo(capture.latitude!, capture.longitude!)"
+          />
+        </div>
+      </section>
+
+      <!-- Cabin cameras (Reolink) -->
+      <ReolinkSection />
+
+      <!-- Cabin sensors (SensorPush) -->
+      <SensorPushSection />
+
+      <!-- Weather stations -->
+      <section v-if="store.weather.length" class="weather-section">
+        <h2>🌤️ Weather Stations</h2>
+        <div class="weather-grid">
+          <div
+            v-for="w in store.weather"
+            :key="w.id"
+            class="weather-card"
+          >
+            <div class="weather-name">{{ w.station_name }}</div>
+            <div class="weather-temp" v-if="w.air_temperature">
+              {{ w.air_temperature }}°F
+            </div>
+            <div class="weather-detail" v-if="w.surface_status">
+              Surface: {{ w.surface_status }}
+            </div>
+            <div class="weather-detail" v-if="w.wind_speed_avg">
+              Wind: {{ w.wind_speed_avg }} mph {{ w.wind_direction }}
+            </div>
+            <div class="weather-detail" v-if="w.precipitation">
+              Precip: {{ w.precipitation }}
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- Mountain pass conditions -->
       <section v-if="store.passes.length" class="passes-section">
         <h2>⛰️ Mountain Passes</h2>
@@ -118,51 +163,6 @@ onMounted(async () => {
           </div>
         </div>
       </section>
-
-      <!-- Weather stations -->
-      <section v-if="store.weather.length" class="weather-section">
-        <h2>🌤️ Weather Stations</h2>
-        <div class="weather-grid">
-          <div
-            v-for="w in store.weather"
-            :key="w.id"
-            class="weather-card"
-          >
-            <div class="weather-name">{{ w.station_name }}</div>
-            <div class="weather-temp" v-if="w.air_temperature">
-              {{ w.air_temperature }}°F
-            </div>
-            <div class="weather-detail" v-if="w.surface_status">
-              Surface: {{ w.surface_status }}
-            </div>
-            <div class="weather-detail" v-if="w.wind_speed_avg">
-              Wind: {{ w.wind_speed_avg }} mph {{ w.wind_direction }}
-            </div>
-            <div class="weather-detail" v-if="w.precipitation">
-              Precip: {{ w.precipitation }}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Camera grid -->
-      <section class="cameras-section">
-        <h2>📸 Cameras ({{ store.currentCycle?.captures.length }})</h2>
-        <div class="camera-grid">
-          <CameraCard
-            v-for="capture in store.currentCycle?.captures"
-            :key="capture.camera_id"
-            :capture="capture"
-            @click="capture.latitude != null && capture.longitude != null && store.flyTo(capture.latitude!, capture.longitude!)"
-          />
-        </div>
-      </section>
-
-      <!-- Cabin sensors (SensorPush) -->
-      <SensorPushSection />
-
-      <!-- Cabin cameras (Reolink) -->
-      <ReolinkSection />
     </template>
 
     <!-- No data -->
