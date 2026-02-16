@@ -22,6 +22,14 @@ export interface SensorRanges {
   vpd?: MetricRange
 }
 
+export interface SensorAverages {
+  temperature?: number
+  humidity?: number
+  dewpoint?: number
+  barometric_pressure?: number
+  vpd?: number
+}
+
 /** A single data point in a time series: [ISO timestamp, value]. */
 export type TimeSeriesPoint = [string, number]
 
@@ -40,6 +48,7 @@ export interface SensorData {
   current: SensorCurrent | null
   range_12h: SensorRanges
   range_24h: SensorRanges
+  avg_24h: SensorAverages
   reading_count: number
   time_series: SensorTimeSeries
 }

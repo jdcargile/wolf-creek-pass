@@ -364,15 +364,15 @@ def _sp_fetch_samples(
 
 def _compute_ranges(
     samples: list[dict], cutoff_12h: str, cutoff_24h: str
-) -> tuple[dict | None, dict, dict]:
-    """Compute current reading, 12h ranges, and 24h ranges from samples.
+) -> tuple[dict | None, dict, dict, dict]:
+    """Compute current reading, 12h/24h ranges, and 24h averages.
 
-    Returns (current, range_12h, range_24h).  Each range dict maps
-    metric_name → {"min": float, "max": float}.  ``current`` is the latest
-    reading dict or None when the list is empty.
+    Returns (current, range_12h, range_24h, avg_24h).  Range dicts map
+    metric_name → {"min": float, "max": float}.  avg_24h maps
+    metric_name → float.  ``current`` is the latest reading dict or None.
     """
     if not samples:
-        return None, {}, {}
+        return None, {}, {}, {}
 
     current_item = samples[-1]
     current: dict[str, Any] = {"timestamp": current_item.get("observed", "")}
@@ -383,6 +383,8 @@ def _compute_ranges(
 
     range_12h: dict[str, dict[str, float]] = {}
     range_24h: dict[str, dict[str, float]] = {}
+    sum_24h: dict[str, float] = {}
+    count_24h: dict[str, int] = {}
 
     for item in samples:
         ts = item.get("observed", "")
@@ -392,13 +394,17 @@ def _compute_ranges(
                 continue
             val = float(raw)
 
-            # 24h range
+            # 24h range + average accumulators
             if ts >= cutoff_24h:
                 if metric not in range_24h:
                     range_24h[metric] = {"min": val, "max": val}
+                    sum_24h[metric] = val
+                    count_24h[metric] = 1
                 else:
                     range_24h[metric]["min"] = min(range_24h[metric]["min"], val)
                     range_24h[metric]["max"] = max(range_24h[metric]["max"], val)
+                    sum_24h[metric] += val
+                    count_24h[metric] += 1
 
             # 12h range
             if ts >= cutoff_12h:
@@ -408,7 +414,11 @@ def _compute_ranges(
                     range_12h[metric]["min"] = min(range_12h[metric]["min"], val)
                     range_12h[metric]["max"] = max(range_12h[metric]["max"], val)
 
-    return current, range_12h, range_24h
+    avg_24h: dict[str, float] = {}
+    for metric in sum_24h:
+        avg_24h[metric] = round(sum_24h[metric] / count_24h[metric], 2)
+
+    return current, range_12h, range_24h, avg_24h
 
 
 def _downsample_series(samples: list[dict], max_points: int = 168) -> list[dict]:
@@ -483,7 +493,9 @@ def _build_sensor_response(include_history: bool) -> dict:
     for sensor_id, display_name in SENSORS.items():
         samples = all_samples.get(sensor_id, [])
 
-        current, range_12h, range_24h = _compute_ranges(samples, cutoff_12h, cutoff_24h)
+        current, range_12h, range_24h, avg_24h = _compute_ranges(
+            samples, cutoff_12h, cutoff_24h
+        )
 
         time_series: dict[str, list] = {}
         if include_history and samples:
@@ -497,6 +509,7 @@ def _build_sensor_response(include_history: bool) -> dict:
                 "current": current,
                 "range_12h": range_12h,
                 "range_24h": range_24h,
+                "avg_24h": avg_24h,
                 "reading_count": len(samples),
                 "time_series": time_series,
             }

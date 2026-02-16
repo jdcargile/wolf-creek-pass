@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { SensorData, MetricConfig, SensorRanges, SensorCurrent, SensorTimeSeries } from '@/types/sensorpush'
+import type { SensorData, SensorAverages, MetricConfig, SensorRanges, SensorCurrent, SensorTimeSeries } from '@/types/sensorpush'
 import { METRIC_CONFIGS } from '@/types/sensorpush'
 import MetricRangeBar from '@/components/MetricRangeBar.vue'
 import SparklineChart from '@/components/SparklineChart.vue'
@@ -58,10 +58,11 @@ function hasTimeSeries(metric: MetricConfig): boolean {
   return !!series && series.length >= 2
 }
 
-/** Format the primary current reading (temperature). */
+/** Format the primary current reading (temperature) with 1 decimal. */
 const currentTemp = computed(() => {
-  if (!props.sensor.current?.temperature) return null
-  return Math.round(props.sensor.current.temperature)
+  const t = props.sensor.current?.temperature
+  if (t == null) return null
+  return t.toFixed(1)
 })
 
 /** Format the last-updated timestamp in Mountain Time. */
@@ -69,15 +70,47 @@ const lastUpdated = computed(() => {
   if (!props.sensor.current?.timestamp) return ''
   return formatTime(props.sensor.current.timestamp)
 })
+
+/**
+ * Build a compact daily average string: "74°F / 39%" or "65°F / 51% / 23.0in".
+ * Only includes metrics this sensor actually has averages for.
+ * Order follows METRIC_CONFIGS but only temp, humidity, pressure for brevity.
+ */
+const dailyAvg = computed(() => {
+  const avg = props.sensor.avg_24h
+  if (!avg) return ''
+
+  const parts: string[] = []
+  // Show only the 3 key metrics in the compact header line
+  const show: { key: keyof SensorAverages; unit: string; precision: number }[] = [
+    { key: 'temperature', unit: '°F', precision: 0 },
+    { key: 'humidity', unit: '%', precision: 0 },
+    { key: 'barometric_pressure', unit: 'in', precision: 1 },
+  ]
+  for (const { key, unit, precision } of show) {
+    const val = avg[key]
+    if (val != null) {
+      parts.push(`${val.toFixed(precision)}${unit}`)
+    }
+  }
+  return parts.join(' / ')
+})
 </script>
 
 <template>
   <div class="sensor-card">
     <!-- Header -->
     <div class="card-header">
-      <div class="card-name">{{ sensor.name }}</div>
-      <div class="card-headline" v-if="currentTemp !== null">
-        {{ currentTemp }}°F
+      <div class="card-header-left">
+        <div class="card-name">{{ sensor.name }}</div>
+        <div class="card-meta" v-if="lastUpdated">Last reading: {{ lastUpdated }}</div>
+      </div>
+      <div class="card-header-right">
+        <div class="card-headline" v-if="currentTemp !== null">
+          {{ currentTemp }}°F
+        </div>
+        <div class="card-meta" v-if="dailyAvg">Daily Avg: {{ dailyAvg }}</div>
+        <div class="card-meta shimmer-text" v-else-if="loadingHistory">Daily Avg: ---</div>
       </div>
     </div>
 
@@ -155,7 +188,6 @@ const lastUpdated = computed(() => {
 
     <!-- Footer -->
     <div class="card-footer">
-      <span v-if="lastUpdated">Updated {{ lastUpdated }}</span>
       <span v-if="hasHistory">{{ sensor.reading_count }} readings (7d)</span>
       <span v-else-if="loadingHistory" class="shimmer-text">Loading history...</span>
     </div>
@@ -181,8 +213,21 @@ const lastUpdated = computed(() => {
 .card-header {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: flex-start;
   margin-bottom: 0.65rem;
+}
+
+.card-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.card-header-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
 }
 
 .card-name {
@@ -190,10 +235,17 @@ const lastUpdated = computed(() => {
   font-size: 0.9rem;
 }
 
+.card-meta {
+  font-size: 0.65rem;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .card-headline {
   font-size: 1.4rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 /* ── Metric list ──────────────────────────────────────────────────────── */
